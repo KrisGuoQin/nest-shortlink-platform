@@ -1,17 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { UsersService } from './users.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
 import { QueryUserDto } from './dto/query-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
 @Controller('users')
 export class UsersController {
     constructor(private readonly service: UsersService) {}
-
-    @Post()
-    async create(@Body() dto:CreateUserDto) {
-        return await this.service.create(dto)
-    }
 
     @Get()
     async findAll(@Query() query: QueryUserDto) {

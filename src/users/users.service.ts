@@ -1,34 +1,51 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { CreateUserDto } from './dto/create-user.dto.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { QueryUserDto } from './dto/query-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { publicUserSelect } from './users.select.js';
+
+
+interface CreateUserInput {
+    email: string;
+    name?: string;
+    passwordHash: string;
+}
 
 @Injectable()
 export class UsersService {
     constructor(private readonly prisma: PrismaService) {}
 
-    async create(dto: CreateUserDto) {
+    async createForAuth(input: CreateUserInput) {
         try {
-            // 应用层检查无法代替数据库@unique约束
-            // 因为2者解决的是不同层面的问题，而应用层检查存在无法消除的竞态条件
             return await this.prisma.user.create({
-                data: {
-                    email: dto.email,
-                    name: dto.name
-                }
+                data: input,
+                select: publicUserSelect
             })
         } catch (error) {
             if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&
                 error.code === 'P2002'
             ) {
+                console.log('error', error)
                 throw new ConflictException('Email already exists')
             }
 
             throw error
         }
+    }
+
+    async findByEmailForAuth(email: string) {
+        return await this.prisma.user.findUnique({
+            where: {
+                email,
+            },
+            select: {
+                id: true,
+                email: true,
+                passwordHash: true
+            }
+        })
     }
 
     async findAll(query: QueryUserDto) {
@@ -40,7 +57,8 @@ export class UsersService {
                 take: pageSize,
                 orderBy: {
                     createdAt: 'desc'
-                }
+                },
+                select: publicUserSelect,
             }),
             this.prisma.user.count()
         ])
@@ -60,7 +78,8 @@ export class UsersService {
         const user = await this.prisma.user.findUnique({
             where: {
                 id,
-            }
+            },
+            select: publicUserSelect,
         })
 
         if (!user) {
@@ -74,11 +93,12 @@ export class UsersService {
         await this.findOne(id)
 
         try {
-            return this.prisma.user.update({
+            return await this.prisma.user.update({
                 where: {
                     id
                 },
-                data: dto
+                data: dto,
+                select: publicUserSelect
             })
         } catch (error) {
             if (
