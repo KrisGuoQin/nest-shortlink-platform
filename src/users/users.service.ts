@@ -11,6 +11,8 @@ export class UsersService {
 
     async create(dto: CreateUserDto) {
         try {
+            // 应用层检查无法代替数据库@unique约束
+            // 因为2者解决的是不同层面的问题，而应用层检查存在无法消除的竞态条件
             return await this.prisma.user.create({
                 data: {
                     email: dto.email,
