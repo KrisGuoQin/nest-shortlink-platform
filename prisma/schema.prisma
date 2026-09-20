@@ -20,6 +20,7 @@ model User {
 
   sessions AuthSession[]
   workspaceMemberships WorkspaceMember[]
+  createdLinks ShortLink[] @relation("ShortLinkCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,7 +81,9 @@ model Workspace {
   id String @id @default(uuid())
   name String
   slug String @unique
+
   members WorkspaceMember[]
+  shortLinks ShortLink[]
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -114,4 +117,42 @@ model WorkspaceMemberRole {
   
   @@id([memberId, roleId])
   @@index([roleId])
+}
+
+enum ShortLinkStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ShortLinkVisibility {
+  PUBLIC
+  WORKSPACE
+  PRIVATE
+}
+
+model ShortLink {
+  id String @id @default(uuid())
+
+  workspaceId String
+  createdById String
+  
+  code String @unique @db.VarChar(16)
+  originalUrl String @db.Text
+  title String? @db.VarChar(200)
+  visibility ShortLinkVisibility @default(PUBLIC)
+  status ShortLinkStatus @default(ACTIVE)
+
+  expiresAt DateTime?
+  maxVisits Int?
+  visitCount Int @default(0)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User @relation("ShortLinkCreator", fields: [createdById], references: [id])
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, status])
+  @@index([createdById])
 }

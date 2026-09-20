@@ -14,19 +14,7 @@ import { isUUID } from 'class-validator';
 import { AuthorizationService } from '../authorization.service.js';
 
 import { WORKSPACE_PERMISSIONS_KEY } from '../decorators/workspace-permissions.decorator.js';
-import { AuthenticatedRequest } from '../../auth/interface/authenticated-request.interface.js';
-
-interface WorkspaceRequest extends AuthenticatedRequest {
-    workspaceAccess?: {
-        workspaceId: string;
-
-        memberId: string;
-
-        roles: string[];
-
-        permissionCodes: Set<string>;
-    };
-}
+import { WorkspaceAuthenticatedRequest } from '../interfaces/workspace-authenticated-request.interface.js';
 
 @Injectable()
 export class WorkspacePermissionGuard implements CanActivate {
@@ -46,7 +34,7 @@ export class WorkspacePermissionGuard implements CanActivate {
             return true;
         }
 
-        const request = context.switchToHttp().getRequest<WorkspaceRequest>();
+        const request = context.switchToHttp().getRequest<WorkspaceAuthenticatedRequest>();
 
         const workspaceId = request.params?.workspaceId as string;
 

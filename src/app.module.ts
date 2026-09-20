@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './auth/guard/jwt-auth.guard.js';
 import { PermissionGuard } from './authorization/guards/permission.guard.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { WorkspacePermissionGuard } from './authorization/guards/workspace-permission.guard.js';
+import { ShortLinksModule } from './short-links/short-links.module.js';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { WorkspacePermissionGuard } from './authorization/guards/workspace-permi
     UsersModule,
     AuthModule,
     AuthorizationModule,
-    WorkspacesModule
+    WorkspacesModule,
+    ShortLinksModule
   ],
   controllers: [AppController],
   providers: [
