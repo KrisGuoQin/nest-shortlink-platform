@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { QueryUserDto } from './dto/query-user.dto.js';
@@ -18,9 +18,35 @@ export class UsersService {
 
     async createForAuth(input: CreateUserInput) {
         try {
-            return await this.prisma.user.create({
-                data: input,
-                select: publicUserSelect
+            // 使用事务处理
+            return await this.prisma.$transaction(async (tx) => {
+                const memberRole = await tx.role.findUnique({
+                    where: {
+                        code: 'MEMBER'
+                    },
+                    select: {
+                        id: true
+                    }
+                })
+
+                if (!memberRole) {
+                    throw new InternalServerErrorException('Default MEMBER role is not initialized')
+                }
+
+                const user = await tx.user.create({
+                    data: input,
+                    select: publicUserSelect
+                })
+
+                // 创建用户默认赋值member权限
+                await tx.userRole.create({
+                    data: {
+                        userId: user.id,
+                        roleId: memberRole.id
+                    }
+                })
+
+                return user
             })
         } catch (error) {
             if (

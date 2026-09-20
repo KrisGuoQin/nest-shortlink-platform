@@ -4,6 +4,8 @@ import type { Request } from 'express';
 import { AccessTokenPayload, JwtPayload } from "../interface/jwt-payload.interface.js";
 import { AuthTokenService } from "../auth-token.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
+import { Reflector } from "@nestjs/core";
+import { IS_PUBLIC_KEY } from "../../common/decorators/public.decorator.js";
 
 interface RequestWithUser extends Request {
     user?: JwtPayload
@@ -14,9 +16,22 @@ export class JwtAuthGuard implements CanActivate {
     constructor(
         private readonly tokenService: AuthTokenService,
         private readonly prisnaService: PrismaService,
+        private readonly reflector: Reflector,
     ) { }
 
     async canActivate(context: ExecutionContext) {
+        // @Public()装饰器
+        const isPublic = this.reflector.getAllAndOverride<boolean>(
+            IS_PUBLIC_KEY,
+            [
+                context.getHandler(),
+                context.getClass()
+            ]
+        )
+        if(isPublic) {
+            return true
+        }
+
         const request = context.switchToHttp().getRequest<RequestWithUser>()
         const token = this.extractTokenFromHeader(request)
 

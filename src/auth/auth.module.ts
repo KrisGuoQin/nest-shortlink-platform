@@ -14,7 +14,7 @@ import { AuthTokenService } from './auth-token.service.js';
     JwtModule.register({}),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, AuthTokenService],
-  exports: [JwtAuthGuard, AuthTokenService]
+  providers: [AuthService, AuthTokenService],
+  exports: [AuthTokenService]
 })
 export class AuthModule {}

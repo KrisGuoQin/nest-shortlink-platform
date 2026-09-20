@@ -19,6 +19,7 @@ model User {
   passwordHash String
 
   sessions AuthSession[]
+  roles UserRole[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -38,4 +39,52 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Role {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  users UserRole[]
+  permissions RolePermission[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Permission {
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  roles RolePermission[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+
+  // 复合主键，组合只能存在一次
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId String
+  permissionId String
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+
+  createdAt        DateTime  @default(now())
+
+  // 复合主键，组合只能存在一次
+  @@id([roleId, permissionId])
+  @@index([permissionId])
 }
