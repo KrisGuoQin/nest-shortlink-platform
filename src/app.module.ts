@@ -12,6 +12,7 @@ import { PermissionGuard } from './authorization/guards/permission.guard.js';
 import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { WorkspacePermissionGuard } from './authorization/guards/workspace-permission.guard.js';
 import { ShortLinksModule } from './short-links/short-links.module.js';
+import { RedirectsModule } from './redirects/redirects.module.js';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { ShortLinksModule } from './short-links/short-links.module.js';
     AuthModule,
     AuthorizationModule,
     WorkspacesModule,
-    ShortLinksModule
+    ShortLinksModule,
+    RedirectsModule
   ],
   controllers: [AppController],
   providers: [

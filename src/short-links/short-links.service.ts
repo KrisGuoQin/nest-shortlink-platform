@@ -194,6 +194,7 @@ export class ShortLinksService {
                 title: dto.title,
                 visibility: dto.visibility,
                 maxVisits: dto.maxVisits,
+                status: dto.status,
                 expiresAt
             }
         })
