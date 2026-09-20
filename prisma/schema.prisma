@@ -19,7 +19,7 @@ model User {
   passwordHash String
 
   sessions AuthSession[]
-  roles UserRole[]
+  workspaceMemberships WorkspaceMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -45,7 +45,7 @@ model Role {
   id String @id @default(uuid())
   code String @unique
   name String
-  users UserRole[]
+  members WorkspaceMemberRole[]
   permissions RolePermission[]
 
   createdAt        DateTime  @default(now())
@@ -62,29 +62,56 @@ model Permission {
   updatedAt        DateTime  @updatedAt
 }
 
-model UserRole {
-  userId String
-  roleId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  assignedAt DateTime @default(now())
-
-  // 复合主键，组合只能存在一次
-  @@id([userId, roleId])
-  @@index([roleId])
-}
-
 model RolePermission {
   roleId String
   permissionId String
+
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
 
   createdAt        DateTime  @default(now())
 
   // 复合主键，组合只能存在一次
   @@id([roleId, permissionId])
   @@index([permissionId])
+}
+
+model Workspace {
+  id String @id @default(uuid())
+  name String
+  slug String @unique
+  members WorkspaceMember[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model WorkspaceMember {
+  id String @id @default(uuid())
+
+  workspaceId String
+  userId String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roles WorkspaceMemberRole[]
+
+  joinedAt DateTime @default(now())
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model WorkspaceMemberRole {
+  memberId String
+  roleId String
+
+  member WorkspaceMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime  @default(now())
+  
+  @@id([memberId, roleId])
+  @@index([roleId])
 }

@@ -39,12 +39,12 @@ export class UsersService {
                 })
 
                 // 创建用户默认赋值member权限
-                await tx.userRole.create({
-                    data: {
-                        userId: user.id,
-                        roleId: memberRole.id
-                    }
-                })
+                // await tx.userRole.create({
+                //     data: {
+                //         userId: user.id,
+                //         roleId: memberRole.id
+                //     }
+                // })
 
                 return user
             })

@@ -1,6 +1,8 @@
 import 'dotenv/config';
 
-import { PrismaPg } from '@prisma/adapter-pg';
+import {
+  PrismaPg,
+} from '@prisma/adapter-pg';
 
 import {
   PrismaClient,
@@ -25,175 +27,144 @@ const prisma =
     adapter,
   });
 
-const permissionDefinitions = [
-  {
-    code: 'user:read',
-    name: 'Read users',
-  },
+const permissions = [
+  ['workspace:read', 'Read workspace'],
+  ['workspace:update', 'Update workspace'],
+  ['workspace:delete', 'Delete workspace'],
 
-  {
-    code: 'user:update',
-    name: 'Update users',
-  },
+  ['member:read', 'Read members'],
+  ['member:invite', 'Invite member'],
+  ['member:remove', 'Remove member'],
+  [
+    'member:role:assign',
+    'Assign member roles',
+  ],
 
-  {
-    code: 'user:delete',
-    name: 'Delete users',
-  },
+  ['link:create', 'Create link'],
+  ['link:read', 'Read link'],
+  ['link:update', 'Update link'],
+  ['link:delete', 'Delete link'],
+] as const;
 
-  {
-    code: 'role:read',
-    name: 'Read roles',
-  },
+const roleDefinitions = {
+  OWNER: permissions.map(
+    ([code]) => code,
+  ),
 
-  {
-    code: 'role:assign',
-    name: 'Assign roles',
-  },
-];
+  ADMIN: [
+    'workspace:read',
+    'workspace:update',
+
+    'member:read',
+    'member:invite',
+    'member:remove',
+    'member:role:assign',
+
+    'link:create',
+    'link:read',
+    'link:update',
+    'link:delete',
+  ],
+
+  MEMBER: [
+    'workspace:read',
+    'member:read',
+
+    'link:create',
+    'link:read',
+    'link:update',
+    'link:delete',
+  ],
+};
 
 async function main() {
-  const permissions = [];
+  for (
+    const [code, name]
+    of permissions
+  ) {
+    await prisma.permission.upsert({
+      where: {
+        code,
+      },
+
+      update: {
+        name,
+      },
+
+      create: {
+        code,
+        name,
+      },
+    });
+  }
 
   for (
-    const definition
-    of permissionDefinitions
+    const [
+      roleCode,
+      permissionCodes,
+    ]
+    of Object.entries(
+      roleDefinitions,
+    )
   ) {
-    const permission =
-      await prisma.permission.upsert({
+    const role =
+      await prisma.role.upsert({
         where: {
-          code: definition.code,
+          code: roleCode,
         },
 
         update: {
-          name: definition.name,
+          name: roleCode,
         },
 
-        create: definition,
+        create: {
+          code: roleCode,
+          name: roleCode,
+        },
       });
 
-    permissions.push(permission);
-  }
-
-  const admin =
-    await prisma.role.upsert({
-      where: {
-        code: 'ADMIN',
-      },
-
-      update: {
-        name: 'Administrator',
-      },
-
-      create: {
-        code: 'ADMIN',
-        name: 'Administrator',
-      },
-    });
-
-  const member =
-    await prisma.role.upsert({
-      where: {
-        code: 'MEMBER',
-      },
-
-      update: {
-        name: 'Member',
-      },
-
-      create: {
-        code: 'MEMBER',
-        name: 'Member',
-      },
-    });
-
-  // 开发环境直接重建 ADMIN 权限关系。
-  await prisma.rolePermission.deleteMany({
-    where: {
-      roleId: admin.id,
-    },
-  });
-
-  await prisma.rolePermission.createMany({
-    data: permissions.map(
-      (permission) => ({
-        roleId: admin.id,
-        permissionId:
-          permission.id,
-      }),
-    ),
-  });
-
-  // 给已经存在的用户补 MEMBER。
-  const users =
-    await prisma.user.findMany({
-      select: {
-        id: true,
-      },
-    });
-
-  if (users.length > 0) {
-    await prisma.userRole.createMany({
-      data: users.map(
-        (user) => ({
-          userId: user.id,
-          roleId: member.id,
-        }),
-      ),
-
-      skipDuplicates: true,
-    });
-  }
-
-  // 指定一个开发环境管理员。
-  const adminEmail =
-    process.env
-      .BOOTSTRAP_ADMIN_EMAIL
-      ?.trim()
-      .toLowerCase();
-
-  if (adminEmail) {
-    const adminUser =
-      await prisma.user.findUnique({
+    await prisma.rolePermission
+      .deleteMany({
         where: {
-          email: adminEmail,
+          roleId: role.id,
         },
       });
 
-    if (!adminUser) {
-      throw new Error(
-        `BOOTSTRAP_ADMIN_EMAIL user not found: ${adminEmail}`,
-      );
-    }
+    const rolePermissions =
+      await prisma.permission
+        .findMany({
+          where: {
+            code: {
+              in: permissionCodes,
+            },
+          },
 
-    await prisma.userRole.upsert({
-      where: {
-        userId_roleId: {
-          userId: adminUser.id,
-          roleId: admin.id,
-        },
-      },
+          select: {
+            id: true,
+          },
+        });
 
-      create: {
-        userId: adminUser.id,
-        roleId: admin.id,
-      },
+    await prisma.rolePermission
+      .createMany({
+        data:
+          rolePermissions.map(
+            (permission) => ({
+              roleId: role.id,
 
-      update: {},
-    });
+              permissionId:
+                permission.id,
+            }),
+          ),
+      });
   }
 
   console.log(
-    'RBAC seed completed',
+    'Workspace RBAC seed completed',
   );
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
-
-    process.exitCode = 1;
-  })
+  .catch(console.error)
   .finally(async () => {
     await prisma.$disconnect();
   });

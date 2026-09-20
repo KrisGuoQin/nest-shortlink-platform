@@ -9,6 +9,8 @@ import { AuthorizationModule } from './authorization/authorization.module.js';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/guard/jwt-auth.guard.js';
 import { PermissionGuard } from './authorization/guards/permission.guard.js';
+import { WorkspacesModule } from './workspaces/workspaces.module.js';
+import { WorkspacePermissionGuard } from './authorization/guards/workspace-permission.guard.js';
 
 @Module({
   imports: [
@@ -18,7 +20,8 @@ import { PermissionGuard } from './authorization/guards/permission.guard.js';
     PrismaModule,
     UsersModule,
     AuthModule,
-    AuthorizationModule
+    AuthorizationModule,
+    WorkspacesModule
   ],
   controllers: [AppController],
   providers: [
@@ -29,9 +32,13 @@ import { PermissionGuard } from './authorization/guards/permission.guard.js';
       provide: APP_GUARD,
       useClass: JwtAuthGuard
     },
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: PermissionGuard
+    // }
     {
       provide: APP_GUARD,
-      useClass: PermissionGuard
+      useClass: WorkspacePermissionGuard
     }
   ],
 })

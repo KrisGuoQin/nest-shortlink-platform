@@ -5,22 +5,34 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class AuthorizationService {
     constructor(private readonly prismaService: PrismaService) {}
 
-    async getAccess(userId: string) {
-        const assignments = await this.prismaService.userRole.findMany({
+    /**
+     * 根据uid和wid获取权限
+     * @param userId 
+     * @param workspaceId 
+     * @returns 
+     */
+    async getWorkspaceAccess(userId: string, workspaceId: string) {
+        const membership = await this.prismaService.workspaceMember.findUnique({
             where: {
-                userId,
+                workspaceId_userId: {
+                    workspaceId,
+                    userId,
+                }
             },
             select: {
-                role: {
+                id: true,
+                roles: {
                     select: {
-                        code: true,
-                        name: true,
-                        permissions: {
+                        role: {
                             select: {
-                                permission: {
+                                code: true,
+                                permissions: {
                                     select: {
-                                        code: true,
-                                        name: true
+                                        permission: {
+                                            select: {
+                                                code: true
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -29,55 +41,100 @@ export class AuthorizationService {
                 }
             }
         })
-        const roles = assignments.map(assignment => ({
-            code: assignment.role.code,
-            name: assignment.role.name,
-        }))
-        const permissionMap = new Map<string, { code:string; name: string }>()
-        for (const assignment of assignments) {
-            for (const rolePermission of assignment.role.permissions) {
-                const permission = rolePermission.permission
-                permissionMap.set(permission.code, permission)
+
+        if (!membership) {
+            return null
+        }
+
+        const roles = membership.roles.map(item => item.role.code)
+        const permissionCodes = new Set<string>()
+        for (const memberRole of membership.roles) {
+            for (const rolePermission of memberRole.role.permissions) {
+                permissionCodes.add(rolePermission.permission.code)
             }
         }
 
         return {
-            userId,
+            memberId: membership.id,
             roles,
-            permissions: Array.from(permissionMap.values())
+            permissionCodes,
         }
     }
 
+    async getAccess(userId: string) {
+        // const assignments = await this.prismaService.userRole.findMany({
+        //     where: {
+        //         userId,
+        //     },
+        //     select: {
+        //         role: {
+        //             select: {
+        //                 code: true,
+        //                 name: true,
+        //                 permissions: {
+        //                     select: {
+        //                         permission: {
+        //                             select: {
+        //                                 code: true,
+        //                                 name: true
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // })
+        // const roles = assignments.map(assignment => ({
+        //     code: assignment.role.code,
+        //     name: assignment.role.name,
+        // }))
+        // const permissionMap = new Map<string, { code:string; name: string }>()
+        // for (const assignment of assignments) {
+        //     for (const rolePermission of assignment.role.permissions) {
+        //         const permission = rolePermission.permission
+        //         permissionMap.set(permission.code, permission)
+        //     }
+        // }
+
+        // return {
+        //     userId,
+        //     roles,
+        //     permissions: Array.from(permissionMap.values())
+        // }
+    }
+
     async getPermissionCodes(userId: string) {
-        const assignments = await this.prismaService.userRole.findMany({
-            where: {
-                userId,
-            },
-            select: {
-                role: {
-                    select: {
-                        permissions: {
-                            select: {
-                                permission: {
-                                    select: {
-                                        code: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        })
+        // const assignments = await this.prismaService.userRole.findMany({
+        //     where: {
+        //         userId,
+        //     },
+        //     select: {
+        //         role: {
+        //             select: {
+        //                 permissions: {
+        //                     select: {
+        //                         permission: {
+        //                             select: {
+        //                                 code: true
+        //                             }
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // })
 
-        const permissions = new Set<string>()
-        for (const assignment of assignments) {
-            for (const item of assignment.role.permissions) {
-                permissions.add(item.permission.code)
-            }
-        }
+        // const permissions = new Set<string>()
+        // for (const assignment of assignments) {
+        //     for (const item of assignment.role.permissions) {
+        //         permissions.add(item.permission.code)
+        //     }
+        // }
 
-        return permissions
+        // return permissions
+        return new Set<string>();
     }
 
     async hasAllPermissions(userId: string, requiredPermissions: string[]) {
@@ -147,19 +204,19 @@ export class AuthorizationService {
             );
         }
 
-        await this.prismaService.userRole.upsert({
-            where: {
-                userId_roleId: {
-                    userId,
-                    roleId:  role.id
-                },
-            },
-            create: {
-                userId,
-                roleId: role.id
-            },
-            update: {}
-        })
+        // await this.prismaService.userRole.upsert({
+        //     where: {
+        //         userId_roleId: {
+        //             userId,
+        //             roleId:  role.id
+        //         },
+        //     },
+        //     create: {
+        //         userId,
+        //         roleId: role.id
+        //     },
+        //     update: {}
+        // })
 
         return {
             userId,
@@ -190,11 +247,11 @@ export class AuthorizationService {
             );
         }
 
-        await this.prismaService.userRole.deleteMany({
-            where: {
-                userId,
-                roleId: role.id
-            }
-        })
+        // await this.prismaService.userRole.deleteMany({
+        //     where: {
+        //         userId,
+        //         roleId: role.id
+        //     }
+        // })
     }
 }
