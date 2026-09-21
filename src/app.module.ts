@@ -13,6 +13,8 @@ import { WorkspacesModule } from './workspaces/workspaces.module.js';
 import { WorkspacePermissionGuard } from './authorization/guards/workspace-permission.guard.js';
 import { ShortLinksModule } from './short-links/short-links.module.js';
 import { RedirectsModule } from './redirects/redirects.module.js';
+import { RedisModule } from './redis/redis.module.js';
+import { CacheModule } from './cache/cache.module.js';
 
 @Module({
   imports: [
@@ -25,7 +27,9 @@ import { RedirectsModule } from './redirects/redirects.module.js';
     AuthorizationModule,
     WorkspacesModule,
     ShortLinksModule,
-    RedirectsModule
+    RedirectsModule,
+    RedisModule,
+    CacheModule,
   ],
   controllers: [AppController],
   providers: [
@@ -46,4 +50,4 @@ import { RedirectsModule } from './redirects/redirects.module.js';
     }
   ],
 })
-export class AppModule {}
+export class AppModule { }

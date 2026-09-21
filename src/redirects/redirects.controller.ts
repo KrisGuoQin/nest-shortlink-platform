@@ -29,7 +29,6 @@ export class RedirectsController {
 
     return {
       url,
-
       statusCode: HttpStatus.FOUND,
     };
   }

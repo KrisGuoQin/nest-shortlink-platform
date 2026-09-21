@@ -6,12 +6,14 @@ import { generateShortCode } from './short-code.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { QueryShortLinkDto } from './dto/query-short-link.dto.js';
 import { UpdateShortLinkDto } from './dto/update-short-link.dto.js';
+import { RedirectCacheService } from '../cache/redirect-cache.service.js';
 
 @Injectable()
 export class ShortLinksService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly config: ConfigService,
+        private readonly cache: RedirectCacheService,
     ) { }
 
     async create(
@@ -51,6 +53,12 @@ export class ShortLinksService {
                         maxVisits: dto.maxVisits
                     }
                 })
+
+                // 一个新的code也需要进行失效操作
+                // 因为攻击者可能先请求不存在的，系统设置Negative cache
+                // 随后恰好系统创建同一个Code，如果不清理，TTL内就请求不到新link
+                await this.cache.invalidate(link.code)
+
                 return this.toResponse(link)
             } catch (error) {
                 if (
@@ -160,6 +168,7 @@ export class ShortLinksService {
             },
             select: {
                 id: true,
+                code: true,
                 createdById: true
             }
         })
@@ -168,6 +177,7 @@ export class ShortLinksService {
                 'Short link not found',
             );
         }
+
         this.assertCanManage(userId, roles, link.createdById)
         const expiresAt =
             dto.expiresAt
@@ -184,6 +194,7 @@ export class ShortLinksService {
                 'expiresAt must be in the future',
             );
         }
+
         await this.prisma.shortLink.updateMany({
             where: {
                 id: linkId,
@@ -198,6 +209,8 @@ export class ShortLinksService {
                 expiresAt
             }
         })
+        // 更新成功后清除缓存
+        await this.cache.invalidate(link.code)
 
         return await this.findOne(workspaceId, linkId)
     }
@@ -220,7 +233,7 @@ export class ShortLinksService {
 
                     select: {
                         id: true,
-
+                        code: true,
                         createdById:
                             true,
                     },
@@ -244,7 +257,6 @@ export class ShortLinksService {
                 .deleteMany({
                     where: {
                         id: linkId,
-
                         workspaceId,
                     },
                 });
@@ -256,6 +268,9 @@ export class ShortLinksService {
                 'Short link not found',
             );
         }
+
+        await this.cache.invalidate(link.code)
+        await this.cache.deleteStats(link.id)
     }
 
     private toResponse<T extends { code: string }>(link: T) {
