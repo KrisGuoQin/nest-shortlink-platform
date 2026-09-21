@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt'
 import * as argon2 from 'argon2';
 import { UsersService } from '../users/users.service.js';
@@ -8,19 +8,21 @@ import { JwtPayload, RefreshTokenPayload } from './interface/jwt-payload.interfa
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuthTokenService } from './auth-token.service.js';
 import { randomUUID } from 'node:crypto';
+import { RateLimitService } from '../rate-limit/rate-limit.service.js';
 
 @Injectable()
 export class AuthService {
     constructor(
-        private readonly usersServices: UsersService,
+        private readonly usersSServices: UsersService,
         private readonly prismaService: PrismaService,
         private readonly tokenService: AuthTokenService,
-    ) {}
+        private readonly rateLimitService: RateLimitService,
+    ) { }
 
     async register(dto: RegisterDto) {
         const passwordHash = await argon2.hash(dto.password)
 
-        return this.usersServices.createForAuth({
+        return this.usersSServices.createForAuth({
             email: dto.email,
             name: dto.name,
             passwordHash,
@@ -28,15 +30,26 @@ export class AuthService {
     }
 
     async login(dto: LoginDto) {
-        const user = await this.usersServices.findByEmailForAuth(dto.email)
+        const user = await this.usersSServices.findByEmailForAuth(dto.email)
 
-        if(!user) {
+        if (!user) {
+            // 登录用户不存在也应用限流行为，防止攻击者利用行为差异枚举账户
+            await this.rateLimitService.accountFailure(dto.email)
             throw new UnauthorizedException('Invalid email or password')
         }
 
         const passwordMatched = await argon2.verify(user.passwordHash, dto.password)
 
-        if(!passwordMatched) {
+        if (!passwordMatched) {
+            const result = await this.rateLimitService.accountFailure(dto.email)
+            // 登录失败次数超过限制
+            if (!result.allowed) {
+                throw new HttpException(
+                    'Too many failed login attempts',
+                    HttpStatus.TOO_MANY_REQUESTS
+                )
+            }
+
             throw new UnauthorizedException('Invalid email or password')
         }
 
@@ -45,6 +58,9 @@ export class AuthService {
         const refreshToken = await this.tokenService.signRefreshToken(user.id, sessionId, version)
         const accessToken = await this.tokenService.signAccessToken(user.id, sessionId)
         const refreshTokenHash = this.tokenService.hashRefreshToken(refreshToken)
+
+        // 登录成功，清除登录失败次数限制
+        await this.rateLimitService.clearAccountFailure(dto.email)
 
         await this.prismaService.authSession.create({
             data: {
@@ -148,6 +164,6 @@ export class AuthService {
     }
 
     async me(userId: string) {
-        return await this.usersServices.findOne(userId)
+        return await this.usersSServices.findOne(userId)
     }
 }

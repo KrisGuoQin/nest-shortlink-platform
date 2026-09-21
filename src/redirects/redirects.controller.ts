@@ -20,6 +20,7 @@ import type { OptionalAuthenticatedRequest } from '../auth/interface/optional-au
 import { Public } from '../common/decorators/public.decorator.js';
 import { UnlockShortLinkDto } from './dto/unlock-short-link.dto.js';
 import type { Response } from 'express';
+import { RateLimit } from '../rate-limit/decorators/rate-limit.decorators.js';
 
 @Controller('r')
 export class RedirectsController {
@@ -28,6 +29,14 @@ export class RedirectsController {
   @Get(':code')
   @OptionalAuth()
   @Header('Cache-Control', 'no-store')
+  @RateLimit({
+    algorithm: 'token-bucket',
+    prefix: 'redirect',
+    keyType: 'code',
+    capacity: 5,
+    refillPerSecond: 1,
+    failureMode: 'open'
+  })
   @Redirect()
   async redirect(
     @Param('code', ShortCodePipe) code: string,

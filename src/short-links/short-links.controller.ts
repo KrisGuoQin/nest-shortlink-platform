@@ -24,6 +24,7 @@ import { QueryShortLinkDto } from './dto/query-short-link.dto.js';
 import { UpdateShortLinkDto } from './dto/update-short-link.dto.js';
 
 import { ShortLinksService } from './short-links.service.js';
+import { RateLimit } from '../rate-limit/decorators/rate-limit.decorators.js';
 
 @Controller('workspaces/:workspaceId/links')
 export class ShortLinksController {
@@ -31,21 +32,21 @@ export class ShortLinksController {
 
   @Post()
   @WorkspacePermissions('link:create')
+  @RateLimit({ // 整个workspace下的所有成员，一分钟内最多创建30条
+    algorithm: 'fixed',
+    prefix: 'create-link',
+    keyType: 'workspace',
+    limit: 30,
+    windowSeconds: 60
+  })
   create(
-    @Param('workspaceId', ParseUUIDPipe)
-    workspaceId: string,
-
-    @Req()
-    request: WorkspaceAuthenticatedRequest,
-
-    @Body()
-    dto: CreateShortLinkDto,
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Req() request: WorkspaceAuthenticatedRequest,
+    @Body() dto: CreateShortLinkDto,
   ) {
     return this.shortLinksService.create(
       workspaceId,
-
       request.user.sub,
-
       dto,
     );
   }

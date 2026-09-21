@@ -15,6 +15,8 @@ import { ShortLinksModule } from './short-links/short-links.module.js';
 import { RedirectsModule } from './redirects/redirects.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { CacheModule } from './cache/cache.module.js';
+import { RateLimitModule } from './rate-limit/rate-limit.module.js';
+import { RateLimitGuard } from './rate-limit/guards/rate-limit.guard.js';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { CacheModule } from './cache/cache.module.js';
     RedirectsModule,
     RedisModule,
     CacheModule,
+    RateLimitModule,
   ],
   controllers: [AppController],
   providers: [
@@ -47,6 +50,10 @@ import { CacheModule } from './cache/cache.module.js';
     {
       provide: APP_GUARD,
       useClass: WorkspacePermissionGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard
     }
   ],
 })

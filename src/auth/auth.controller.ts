@@ -5,10 +5,11 @@ import { LoginDto } from './dto/login.dto.js';
 import type { AuthenticatedRequest } from './interface/authenticated-request.interface.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { Public } from '../common/decorators/public.decorator.js';
+import { RateLimit } from '../rate-limit/decorators/rate-limit.decorators.js';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
 
   @Post('register')
@@ -20,6 +21,14 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ // 滑动窗口60秒内登录10次
+    algorithm: 'sliding',
+    prefix: 'login-ip',
+    keyType: 'ip',
+    limit: 10,
+    windowSeconds: 60,
+    failureMode: 'closed' // 限流系统挂了，不允许继续用，防止暴力破解
+  })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto)
   }
