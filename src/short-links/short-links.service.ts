@@ -7,6 +7,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { QueryShortLinkDto } from './dto/query-short-link.dto.js';
 import { UpdateShortLinkDto } from './dto/update-short-link.dto.js';
 import { RedirectCacheService } from '../cache/redirect-cache.service.js';
+import { assertCanManageShortLink } from './short-link-authorization.js';
 
 @Injectable()
 export class ShortLinksService {
@@ -178,7 +179,7 @@ export class ShortLinksService {
             );
         }
 
-        this.assertCanManage(userId, roles, link.createdById)
+        assertCanManageShortLink(userId, roles, link.createdById)
         const expiresAt =
             dto.expiresAt
                 ? new Date(
@@ -245,7 +246,7 @@ export class ShortLinksService {
             );
         }
 
-        this.assertCanManage(
+        assertCanManageShortLink(
             userId,
             roles,
             link.createdById,
@@ -279,22 +280,5 @@ export class ShortLinksService {
             ...link,
             shortUrl: `${baseUrl}/${link.code}`
         }
-    }
-
-    private assertCanManage(
-        userId: string,
-        roles: string[],
-        createdById: string,
-    ) {
-        const privileged = roles.includes('OWNER') || roles.includes('ADMIN')
-        if (privileged) {
-            return
-        }
-        if (createdById === userId) {
-            return
-        }
-        throw new ForbiddenException(
-            'You can only manage links you created',
-        );
     }
 }

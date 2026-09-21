@@ -6,6 +6,7 @@ import { AuthTokenService } from "../auth-token.service.js";
 import { PrismaService } from "../../prisma/prisma.service.js";
 import { Reflector } from "@nestjs/core";
 import { IS_PUBLIC_KEY } from "../../common/decorators/public.decorator.js";
+import { OPTIONAL_AUTH_KEY } from "../../common/decorators/optional-auth.decorator.js";
 
 interface RequestWithUser extends Request {
     user?: JwtPayload
@@ -28,14 +29,25 @@ export class JwtAuthGuard implements CanActivate {
                 context.getClass()
             ]
         )
-        if(isPublic) {
+        if (isPublic) {
             return true
         }
+        const optionalAuth = this.reflector.getAllAndOverride<boolean>(
+            OPTIONAL_AUTH_KEY,
+            [
+                context.getHandler(),
+                context.getClass(),
+            ]
+        )
 
         const request = context.switchToHttp().getRequest<RequestWithUser>()
         const token = this.extractTokenFromHeader(request)
 
         if (!token) {
+            // 无token，匿名的继续
+            if (optionalAuth) {
+                return true
+            }
             throw new UnauthorizedException('Access token is required')
         }
 

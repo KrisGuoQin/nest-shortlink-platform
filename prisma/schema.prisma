@@ -21,6 +21,7 @@ model User {
   sessions AuthSession[]
   workspaceMemberships WorkspaceMember[]
   createdLinks ShortLink[] @relation("ShortLinkCreator")
+  sharedLinks ShortLinkShareUser[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -128,6 +129,7 @@ enum ShortLinkVisibility {
   PUBLIC
   WORKSPACE
   PRIVATE
+  PASSWORD
 }
 
 model ShortLink {
@@ -145,14 +147,32 @@ model ShortLink {
   expiresAt DateTime?
   maxVisits Int?
   visitCount Int @default(0)
+  // PASSWORD模式使用
+  passwordHash String?
+  // 分享策略版本
+  // 修改密码/访问策略时递增
+  accessVersion Int @default(0)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User @relation("ShortLinkCreator", fields: [createdById], references: [id])
-  
+  sharedUsers ShortLinkShareUser[]
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, status])
   @@index([createdById])
+}
+
+model ShortLinkShareUser {
+  shortLinkId String
+  userId String
+
+  shortLink ShortLink @relation(fields: [shortLinkId],references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId],references: [id], onDelete: Cascade)
+  
+  createdAt        DateTime  @default(now())
+  @@id([shortLinkId, userId])
+  @@index([userId])
 }

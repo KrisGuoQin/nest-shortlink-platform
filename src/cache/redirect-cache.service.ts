@@ -1,13 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service.js';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
 
 export interface RedirectSnapshot {
     id: string;
+    code: string;
+    workspaceId: string;
+    createdById: string;
     originalUrl: string;
     status: 'ACTIVE' | 'DISABLED';
-    visibility: 'PUBLIC' | 'WORKSPACE' | 'PRIVATE';
+    visibility: 'PUBLIC' | 'WORKSPACE' | 'PRIVATE' | 'PASSWORD';
+    accessVersion: number;
     expiresAt: string | null;
     maxVisits: number | null;
     visitCount: number;
@@ -27,7 +30,7 @@ export class RedirectCacheService {
     constructor(private readonly redis: RedisService) { }
 
     private cacheKey(code: string) {
-        return `redirect:v1:${code}`;
+        return `redirect:v2:${code}`;
     }
     private lockKey(code: string) {
         return `redirect:lock:${code}`;
