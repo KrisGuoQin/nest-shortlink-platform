@@ -23,7 +23,9 @@
     "seed:rbac": "tsx scripts/seed-rbac.ts",
     "start:worker": "nest start --entryFile analytics-worker/main --tsc",
     "start:worker:dev": "nest start --entryFile analytics-worker/main --watch --tsc",
-    "start:worker:prod": "node dist/analytics-worker/main.js"
+    "start:worker:prod": "node dist/analytics-worker/main.js",
+    "start:outbox": "nest start --entryFile outbox-worker/main --tsc",
+    "start:outbox:dev": "nest start --entryFile outbox-worker/main --watch --tsc"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

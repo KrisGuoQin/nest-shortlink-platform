@@ -25,6 +25,7 @@ import { UpdateShortLinkDto } from './dto/update-short-link.dto.js';
 
 import { ShortLinksService } from './short-links.service.js';
 import { RateLimit } from '../rate-limit/decorators/rate-limit.decorators.js';
+import { randomUUID } from 'node:crypto';
 
 @Controller('workspaces/:workspaceId/links')
 export class ShortLinksController {
@@ -32,23 +33,20 @@ export class ShortLinksController {
 
   @Post()
   @WorkspacePermissions('link:create')
-  @RateLimit({ // 整个workspace下的所有成员，一分钟内最多创建30条
+  @RateLimit({
+    // 整个workspace下的所有成员，一分钟内最多创建30条
     algorithm: 'fixed',
     prefix: 'create-link',
     keyType: 'workspace',
     limit: 30,
-    windowSeconds: 60
+    windowSeconds: 60,
   })
   create(
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Req() request: WorkspaceAuthenticatedRequest,
     @Body() dto: CreateShortLinkDto,
   ) {
-    return this.shortLinksService.create(
-      workspaceId,
-      request.user.sub,
-      dto,
-    );
+    return this.shortLinksService.create(workspaceId, request.user.sub, dto);
   }
 
   @Get()
@@ -80,26 +78,21 @@ export class ShortLinksController {
   update(
     @Param('workspaceId', ParseUUIDPipe)
     workspaceId: string,
-
     @Param('linkId', ParseUUIDPipe)
     linkId: string,
-
     @Req()
     request: WorkspaceAuthenticatedRequest,
-
     @Body()
     dto: UpdateShortLinkDto,
   ) {
+    const requestId = randomUUID()
     return this.shortLinksService.update(
       workspaceId,
-
-      linkId,
-
       request.user.sub,
-
+      linkId,
       request.workspaceAccess.roles,
-
       dto,
+      requestId
     );
   }
 
@@ -114,14 +107,13 @@ export class ShortLinksController {
     @Req()
     request: WorkspaceAuthenticatedRequest,
   ) {
+    const requestId = randomUUID()
     await this.shortLinksService.remove(
       workspaceId,
-
       linkId,
-
       request.user.sub,
-
       request.workspaceAccess.roles,
+      requestId
     );
   }
 }

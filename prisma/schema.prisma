@@ -203,3 +203,70 @@ model ShortLinkVisit {
 
   @@index([visitedAt])
 }
+
+// 记录：谁，在什么时候，对什么资源，做了什么事
+model AuditLog {
+  id String @id @default(uuid())
+
+  eventId String @unique
+
+  workspaceId String?
+
+  actorUserId String?
+
+  action String @db.VarChar(100)
+
+  resourceType String @db.VarChar(100)
+
+  resourceId String?
+
+  requestId String? @db.VarChar(100)
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([resourceType, resourceId])
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  DEAD
+}
+
+// 还有什么事件需要可靠投递出去
+model OutboxEvent {
+  id String @id
+
+  eventType String @db.VarChar(150)
+
+  aggregateType String @db.VarChar(100)
+
+  aggregateId String?
+
+  payload Json
+
+  status OutboxStatus @default(PENDING)
+
+  attempts Int @default(0)
+
+  nextAttemptAt DateTime @default(now())
+
+  lockedAt DateTime?
+
+  lockedBy String? @db.VarChar(100)
+
+  publishedAt DateTime?
+
+  lastError String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@index([status,nextAttemptAt,createdAt])
+}
