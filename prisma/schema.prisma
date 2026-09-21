@@ -176,3 +176,30 @@ model ShortLinkShareUser {
   @@id([shortLinkId, userId])
   @@index([userId])
 }
+
+// 访问事件
+model ShortLinkVisit {
+  eventId String @id
+
+  shortLinkId String
+
+  workspaceId String
+
+  shortCode String @db.VarChar(16)
+
+  visitedAt DateTime
+
+  ipHash String? @db.VarChar(64)
+
+  userAgent String? @db.VarChar(512)
+
+  referer String? @db.Text
+
+  ingestedAt DateTime @default(now())
+
+  @@index([shortLinkId, visitedAt])
+
+  @@index([workspaceId, visitedAt])
+
+  @@index([visitedAt])
+}

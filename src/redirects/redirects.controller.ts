@@ -5,6 +5,7 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   Post,
   Redirect,
@@ -21,10 +22,21 @@ import { Public } from '../common/decorators/public.decorator.js';
 import { UnlockShortLinkDto } from './dto/unlock-short-link.dto.js';
 import type { Response } from 'express';
 import { RateLimit } from '../rate-limit/decorators/rate-limit.decorators.js';
+import { VisitEventPublisher } from '../messaging/visit-event.publisher.js';
+import { ConfigService } from '@nestjs/config';
+import { ShortLinkVisitedEventV1 } from '../messaging/events/short-link-visited.event.js';
+import { randomUUID } from 'node:crypto';
+import { hashIp } from './hash-ip.js';
 
 @Controller('r')
 export class RedirectsController {
-  constructor(private readonly redirectsService: RedirectsService) { }
+  private readonly logger = new Logger(RedirectsController.name);
+
+  constructor(
+    private readonly redirectsService: RedirectsService,
+    private readonly visitEventPublisher: VisitEventPublisher,
+    private readonly config: ConfigService,
+  ) { }
 
   @Get(':code')
   @OptionalAuth()
@@ -35,23 +47,42 @@ export class RedirectsController {
     keyType: 'code',
     capacity: 5,
     refillPerSecond: 1,
-    failureMode: 'open'
+    failureMode: 'open',
   })
   @Redirect()
   async redirect(
     @Param('code', ShortCodePipe) code: string,
-    @Req() request: OptionalAuthenticatedRequest
+    @Req() request: OptionalAuthenticatedRequest,
   ) {
-    const cookieName = getShareCookieName(code)
-    const shareToken = request.cookies?.[cookieName]
-    const url = await this.redirectsService.resolve(
+    const cookieName = getShareCookieName(code);
+    const shareToken = request.cookies?.[cookieName];
+    const ip = request.ip || request.socket.remoteAddress || '';
+    const target = await this.redirectsService.resolve(
       code,
       request.user?.sub,
-      shareToken
+      shareToken,
     );
+    const secret = this.config.getOrThrow<string>('ANALYTICS_IP_HASH_SECRET');
+
+    const event: ShortLinkVisitedEventV1 = {
+      eventId: randomUUID(),
+      shortLinkId: target.shortLinkId,
+      workspaceId: target.workspaceId,
+      shortCode: target.code,
+      occurredAt: new Date().toISOString(),
+      ipHash: ip ? hashIp(ip, secret) : undefined,
+      userAgent: request.get('user-agent')?.slice(0, 512),
+      referer: request.get('referer')?.slice(0, 2048),
+    };
+
+    void this.visitEventPublisher
+      .publish(event)
+      .catch((error) =>
+        this.logger.error('Failed to publish visit event', error),
+      );
 
     return {
-      url,
+      url: target.originalUrl,
       statusCode: HttpStatus.FOUND,
     };
   }
@@ -62,25 +93,20 @@ export class RedirectsController {
   async unlock(
     @Param('code', ShortCodePipe) code: string,
     @Body() dto: UnlockShortLinkDto,
-    @Res({ passthrough: true }) response: Response
+    @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.redirectsService.unlock(code, dto.password)
-    response.cookie(
-      getShareCookieName(code),
-      result.token,
-      {
-        httpOnly: true,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: result.expiresIn * 1000,
-        path: `/r/${code}`
-      }
-    )
+    const result = await this.redirectsService.unlock(code, dto.password);
+    response.cookie(getShareCookieName(code), result.token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: result.expiresIn * 1000,
+      path: `/r/${code}`,
+    });
 
     return {
       unlock: true,
-      expiresIn: result.expiresIn
-    }
+      expiresIn: result.expiresIn,
+    };
   }
-
 }

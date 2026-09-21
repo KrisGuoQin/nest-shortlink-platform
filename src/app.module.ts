@@ -17,6 +17,7 @@ import { RedisModule } from './redis/redis.module.js';
 import { CacheModule } from './cache/cache.module.js';
 import { RateLimitModule } from './rate-limit/rate-limit.module.js';
 import { RateLimitGuard } from './rate-limit/guards/rate-limit.guard.js';
+import { MessagingModule } from './messaging/messaging.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { RateLimitGuard } from './rate-limit/guards/rate-limit.guard.js';
     RedisModule,
     CacheModule,
     RateLimitModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [

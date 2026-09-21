@@ -20,7 +20,10 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed:rbac": "tsx scripts/seed-rbac.ts"
+    "seed:rbac": "tsx scripts/seed-rbac.ts",
+    "start:worker": "nest start --entryFile analytics-worker/main --tsc",
+    "start:worker:dev": "nest start --entryFile analytics-worker/main --watch --tsc",
+    "start:worker:prod": "node dist/analytics-worker/main.js"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -28,9 +31,12 @@
     "@nestjs/core": "^12.0.1",
     "@nestjs/jwt": "^12.0.2",
     "@nestjs/mapped-types": "*",
+    "@nestjs/microservices": "^12.0.3",
     "@nestjs/platform-express": "^12.0.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.0.1",
     "argon2": "^0.45.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -46,6 +52,7 @@
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
+    "@types/amqplib": "^0.10.8",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",

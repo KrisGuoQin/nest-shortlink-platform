@@ -26,6 +26,13 @@ interface RedirectRow {
     visitCount: number;
 }
 
+export interface RedirectTarget {
+    shortLinkId: string;
+    workspaceId: string;
+    code: string;
+    originalUrl: string;
+}
+
 @Injectable()
 export class RedirectsService {
     constructor(
@@ -35,7 +42,7 @@ export class RedirectsService {
         private readonly shareToken: ShareAccessTokenService,
     ) { }
 
-    async resolve(code: string, userId?: string, shareAccessToken?: string) {
+    async resolve(code: string, userId?: string, shareAccessToken?: string): Promise<RedirectTarget> {
         const snapshot = await this.cache.getOrLoad(code, () =>
             this.loadFromDatabase(code),
         );
@@ -51,7 +58,13 @@ export class RedirectsService {
          * 暂时走PG，原子update
          */
         if (snapshot.maxVisits !== null) {
-            return await this.resolveLimited(snapshot);
+            await this.resolveLimited(snapshot);
+            return {
+                shortLinkId: snapshot.id,
+                workspaceId: snapshot.workspaceId,
+                code: snapshot.code,
+                originalUrl: snapshot.originalUrl
+            };
         }
 
         /**
@@ -59,7 +72,13 @@ export class RedirectsService {
          * Redirect主链路不在写PG
          */
         await this.cache.incrementVisit(snapshot.id, snapshot.visitCount);
-        return snapshot.originalUrl;
+
+        return {
+            shortLinkId: snapshot.id,
+            workspaceId: snapshot.workspaceId,
+            code: snapshot.code,
+            originalUrl: snapshot.originalUrl
+        };
     }
 
     private async loadFromDatabase(code: string) {
@@ -137,6 +156,7 @@ export class RedirectsService {
         }
 
         await this.cache.invalidate(snapshot.code)
+
         throw new HttpException(
             'Short link unavailable or visit limit reached',
             HttpStatus.GONE,

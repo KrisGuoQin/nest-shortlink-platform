@@ -5,9 +5,10 @@ import { ShortCodePipe } from './pipes/short-code.pipe.js';
 import { JwtModule } from '@nestjs/jwt';
 import { ShareAccessTokenService } from './share-access-token.service.js';
 import { AuthorizationModule } from '../authorization/authorization.module.js';
+import { MessagingModule } from '../messaging/messaging.module.js';
 
 @Module({
-  imports: [JwtModule.register({}), AuthorizationModule],
+  imports: [JwtModule.register({}), AuthorizationModule, MessagingModule],
   controllers: [RedirectsController],
   providers: [RedirectsService, ShortCodePipe, ShareAccessTokenService],
 })
