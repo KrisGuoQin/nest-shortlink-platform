@@ -61,7 +61,7 @@ export class RedirectCacheService {
         try {
             const cached = await this.readCache(code);
 
-            this.logger.log(`cached: `, cached)
+            this.logger.log(`cached: `, cached.type)
 
             if (cached.type === 'hit') {
                 return cached.value;
@@ -118,8 +118,8 @@ export class RedirectCacheService {
      */
     private async setSnapshot(code: string, snapshot: RedirectSnapshot) {
         const ttl = this.calculateTtl(snapshot);
-        console.log('set-snapshot', snapshot)
-        console.log('set-snapshot-ttl', ttl)
+        console.log('set-snapshot', snapshot.code)
+        // console.log('set-snapshot-ttl', ttl)
         await this.redis.client.set(this.cacheKey(code), JSON.stringify(snapshot), {
             expiration: {
                 type: 'EX',

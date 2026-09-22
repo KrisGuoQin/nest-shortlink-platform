@@ -13,6 +13,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
         const adapter = new PrismaPg({
             connectionString,
+            max: +(process.env.DB_POLL_MAX ?? 10),
+            connectionTimeoutMillis: +(process.env.DB_CONNECTION_MS ?? 2000),
+            idleTimeoutMillis: 10_000,
         })
 
         super({

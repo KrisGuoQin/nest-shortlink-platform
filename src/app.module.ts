@@ -19,6 +19,7 @@ import { RateLimitModule } from './rate-limit/rate-limit.module.js';
 import { RateLimitGuard } from './rate-limit/guards/rate-limit.guard.js';
 import { MessagingModule } from './messaging/messaging.module.js';
 import { AuditModule } from './audit/audit.module.js';
+import { PerfModule } from './perf/perf.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AuditModule } from './audit/audit.module.js';
     RateLimitModule,
     MessagingModule,
     AuditModule,
+    PerfModule,
   ],
   controllers: [AppController],
   providers: [
