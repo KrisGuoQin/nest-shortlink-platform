@@ -21,19 +21,21 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:3000
+          - api-1:3000
+          - api-2:3000
+          - api-3:3000
 
   - job_name: analytics-worker
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:9465
+          - analytics-worker:9465
 
   - job_name: outbox-worker
     metrics_path: /metrics
     static_configs:
       - targets:
-          - host.docker.internal:9466
+          - outbox-worker:9466
 
   - job_name: postgres
     static_configs:

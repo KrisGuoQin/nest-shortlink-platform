@@ -1,4 +1,60 @@
+x-api-common: &api-common
+  build:
+    context: .
+    target: runtime
+  image: shortlink-api:local
+  env_file:
+    - .env.docker
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+  stop_grace_period: 30s
+  healthcheck:
+    test:
+      [
+        'CMD',
+        'node',
+        '-e',
+        "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+      ]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+  networks:
+    - shortlink
+
 services:
+  nginx:
+    image: nginx:1.30.5-alpine
+
+    container_name: shortlink-nginx
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    ports:
+      - '8080:80'
+
+    depends_on:
+      api-1:
+        condition: service_healthy
+
+      api-2:
+        condition: service_healthy
+
+      api-3:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    networks:
+      - shortlink
+
   postgres:
     image: postgres:17-alpine
     container_name: shortlink-postgres
@@ -8,11 +64,19 @@ services:
       POSTGRES_PASSWORD: shortlink
       POSTGRES_DB: shortlink
 
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U shortlink -d shortlink']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
     ports:
       - '5432:5432'
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shortlink
 
   redis:
     image: redis:8-alpine
@@ -24,6 +88,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - shortlink
 
   rabbitmq:
     image: rabbitmq:4-management
@@ -48,6 +114,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - shortlink
 
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
@@ -64,6 +132,8 @@ services:
 
     depends_on:
       - postgres
+    networks:
+      - shortlink
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.89.0
@@ -78,6 +148,8 @@ services:
 
     depends_on:
       - redis
+    networks:
+      - shortlink
 
   prometheus:
     image: prom/prometheus:v3.14.0
@@ -102,6 +174,8 @@ services:
       - postgres-exporter
       - redis-exporter
       - rabbitmq
+    networks:
+      - shortlink
 
   grafana:
     image: grafana/grafana:13.2.2
@@ -122,6 +196,8 @@ services:
 
     depends_on:
       - prometheus
+    networks:
+      - shortlink
 
   alertmanager:
     image: prom/alertmanager:v0.34.1
@@ -132,6 +208,8 @@ services:
       - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
       - '9093:9093'
+    networks:
+      - shortlink
 
   jaeger:
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
@@ -139,6 +217,8 @@ services:
 
     ports:
       - '16686:16686'
+    networks:
+      - shortlink
 
   otel-collector:
     image: otel/opentelemetry-collector:0.161.0
@@ -158,8 +238,125 @@ services:
     depends_on:
       - jaeger
 
+  analytics-worker:
+    image: shortlink-api:local
+
+    env_file:
+      - .env.docker
+
+    environment:
+      OTEL_SERVICE_NAME: analytics-worker
+
+      DB_POOL_MAX: 5
+
+    command:
+      [
+        'node',
+        '--import',
+        './dist/telemetry/instrumentation.js',
+        'dist/analytics-worker/main.js',
+      ]
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+      rabbitmq:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    networks:
+      - shortlink
+
+  outbox-worker:
+    image: shortlink-api:local
+
+    env_file:
+      - .env.docker
+
+    environment:
+      OTEL_SERVICE_NAME: outbox-worker
+      DB_POOL_MAX: 5
+
+    command:
+      [
+        'node',
+        '--import',
+        './dist/telemetry/instrumentation.js',
+        'dist/outbox-worker/main.js',
+      ]
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+      rabbitmq:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    networks:
+      - shortlink
+
+  api-1:
+    <<: *api-common
+
+    environment:
+      APP_INSTANCE_ID: api-1
+      OTEL_SERVICE_NAME: shortlink-api
+      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-1
+
+    ports:
+      - '127.0.0.1:3101:3000'
+    networks:
+      - shortlink
+
+  api-2:
+    <<: *api-common
+
+    environment:
+      APP_INSTANCE_ID: api-2
+      OTEL_SERVICE_NAME: shortlink-api
+      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-2
+
+    ports:
+      - '127.0.0.1:3102:3000'
+    networks:
+      - shortlink
+
+  api-3:
+    <<: *api-common
+
+    environment:
+      APP_INSTANCE_ID: api-3
+      OTEL_SERVICE_NAME: shortlink-api
+      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-3
+
+    ports:
+      - '127.0.0.1:3103:3000'
+    networks:
+      - shortlink
+
+  migrate:
+    build:
+      context: .
+      target: migration
+    env_file:
+      - .env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    networks:
+      - shortlink
+
 volumes:
   postgres_data:
   rabbitmq_data:
   prometheus_data:
   grafana_data:
+
+networks:
+  shortlink:
+    driver: bridge

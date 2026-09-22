@@ -23,6 +23,8 @@ import { PerfModule } from './perf/perf.module.js';
 import { MetricsModule } from './metrics/metrics.module.js';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 import { TraceIdMiddleware } from './telemetry/trace-id.middleware.js';
+import { HealthModule } from './health/health.module.js';
+import { InstanceIdMiddleware } from './common/middleware/instance-id.middleware.js';
 
 @Module({
   imports: [
@@ -43,6 +45,7 @@ import { TraceIdMiddleware } from './telemetry/trace-id.middleware.js';
     AuditModule,
     PerfModule,
     MetricsModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
@@ -71,6 +74,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(
+        InstanceIdMiddleware,
         TraceIdMiddleware,
         HttpMetricsMiddleware
       )

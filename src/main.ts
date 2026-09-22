@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableShutdownHooks()
   app.use(cookieParser())
   app.useGlobalPipes(
     new ValidationPipe({
@@ -18,6 +19,11 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter())
 
-  await app.listen(process.env.PORT ?? 3000);
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
+
+  const port = Number(process.env.PORT ?? 3000);
+
+  await app.listen(port, '0.0.0.0');
 }
 await bootstrap();
