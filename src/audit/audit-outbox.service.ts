@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client.js';
 import { randomUUID } from 'node:crypto';
+import { context as otelContext, propagation } from '@opentelemetry/api'
 
 interface RecordAuditInput {
     eventType: string;
@@ -16,6 +17,9 @@ interface RecordAuditInput {
 @Injectable()
 export class AuditOutboxService {
     async record(tx: Prisma.TransactionClient, input: RecordAuditInput) {
+        const traceContext: Record<string, string> = {};
+        propagation.inject(otelContext.active(), traceContext);
+
         const eventId = randomUUID();
         const occurredAt = new Date();
         const payload: Prisma.InputJsonValue = {
@@ -31,6 +35,7 @@ export class AuditOutboxService {
                 type: input.resourceType,
                 id: input.resourceId ?? null,
             },
+            traceContext, // 将 traceContext 添加到 payload 中，http和outbox连接起来
         };
 
         await tx.auditLog.create({

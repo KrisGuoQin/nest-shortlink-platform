@@ -1,19 +1,23 @@
 import { Controller, Inject, Logger } from '@nestjs/common';
-
 import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
+import {
+    context as otelContext,
+    propagation,
+    ROOT_CONTEXT,
+    SpanStatusCode,
+    trace,
+} from '@opentelemetry/api';
 
 import { Prisma } from '../generated/prisma/client.js';
-
 import { PrismaService } from '../prisma/prisma.service.js';
-
 import type { ShortLinkVisitedEventV1 } from '../messaging/events/short-link-visited.event.js';
-
 import { SHORT_LINK_VISITED_PATTERN } from '../messaging/messaging.constants.js';
 import { MetricsService } from '../metrics/metrics.service.js';
 
 @Controller()
 export class VisitEventsConsumer {
     private readonly logger = new Logger(VisitEventsConsumer.name);
+    private readonly tracer = trace.getTracer('analytics-worker');
 
     constructor(
         private readonly prisma: PrismaService,
@@ -27,6 +31,44 @@ export class VisitEventsConsumer {
         @Ctx()
         context: unknown,
     ) {
+        const parentContext = propagation.extract(
+            ROOT_CONTEXT,
+            event.traceContext || {},
+        );
+
+        return otelContext.with(parentContext, () =>
+            this.tracer.startActiveSpan(
+                'analytics.consume.shortlink.visited',
+                async (span) => {
+                    try {
+                        span.setAttribute('message.eventId', event.eventId);
+                        span.setAttribute('shortlink.id', event.shortLinkId);
+
+                        await this.processEvent(event, context);
+
+                        span.setStatus({ code: SpanStatusCode.OK });
+                    } catch (error) {
+                        span.recordException(
+                            error instanceof Error
+                                ? error
+                                : new Error(
+                                    String(error),
+                                ),
+                        );
+
+                        span.setStatus({
+                            code:
+                                SpanStatusCode.ERROR,
+                        });
+                    } finally {
+                        span.end();
+                    }
+                },
+            ),
+        );
+    }
+
+    private async processEvent(event: ShortLinkVisitedEventV1, context: unknown) {
         const rmqContext = context as RmqContext;
         const channel = rmqContext.getChannelRef();
         const message = rmqContext.getMessage();

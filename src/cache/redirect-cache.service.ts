@@ -15,6 +15,7 @@ export interface RedirectSnapshot {
     expiresAt: string | null;
     maxVisits: number | null;
     visitCount: number;
+    cacheType?: "hit" | "negative" | "miss";
 }
 
 type Loader = () => Promise<RedirectSnapshot | null>;
@@ -61,25 +62,45 @@ export class RedirectCacheService {
         } catch (error) { }
     }
 
-    async getOrLoad(code: string, loader: Loader) {
+    async getOrLoad(code: string, loader: Loader): Promise<RedirectSnapshot | null> {
         try {
             const cached = await this.readCache(code);
 
-            this.logger.log(`cached: `, cached.type)
+            this.logger.log(`cached: ${cached.type}`);
 
             this.metrics.redirectCacheTotal.inc({ result: cached.type });
 
             if (cached.type === 'hit') {
-                return cached.value;
+                return {
+                    ...cached.value,
+                    cacheType: cached.type,
+                };
             }
             if (cached.type === 'negative') {
                 return null;
             }
-            return await this.loadWithLock(code, loader);
+
+            const result = await this.loadWithLock(code, loader);
+            if (!result) {
+                return null;
+            }
+
+            return {
+                ...result,
+                cacheType: cached.type,
+            };
         } catch (error) {
             this.logger.warn(`Redis unavailable, falling back to DB for ${code}`);
 
-            return loader();
+            const result = await loader();
+            if (!result) {
+                return null;
+            }
+
+            return {
+                ...result,
+                cacheType: 'miss',
+            };
         }
     }
 
@@ -124,8 +145,8 @@ export class RedirectCacheService {
      */
     private async setSnapshot(code: string, snapshot: RedirectSnapshot) {
         const ttl = this.calculateTtl(snapshot);
-        console.log('set-snapshot', snapshot.code)
-        // console.log('set-snapshot-ttl', ttl)
+        this.logger.log(`set-snapshot: ${snapshot.code}`);
+
         await this.redis.client.set(this.cacheKey(code), JSON.stringify(snapshot), {
             expiration: {
                 type: 'EX',

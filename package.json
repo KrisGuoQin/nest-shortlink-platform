@@ -26,7 +26,9 @@
     "start:worker:prod": "node dist/analytics-worker/main.js",
     "start:outbox": "nest start --entryFile outbox-worker/main --tsc",
     "start:outbox:dev": "nest start --entryFile outbox-worker/main --watch --tsc",
-    "start:app": "pnpm run start:dev & pnpm run start:worker:dev & pnpm run start:outbox:dev"
+    "start:otel": "OTEL_SERVICE_NAME=shortlink-api NODE_OPTIONS='--import=tsx --import=./src/telemetry/instrumentation.ts' pnpm run start",
+    "start:worker:otel": "OTEL_SERVICE_NAME=shortlink-worker NODE_OPTIONS='--import=tsx --import=./src/telemetry/instrumentation.ts' pnpm run start:worker",
+    "start:outbox:otel": "OTEL_SERVICE_NAME=shortlink-outbox NODE_OPTIONS='--import=tsx --import=./src/telemetry/instrumentation.ts' pnpm run start:outbox"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -36,6 +38,10 @@
     "@nestjs/mapped-types": "*",
     "@nestjs/microservices": "^12.0.3",
     "@nestjs/platform-express": "^12.0.1",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@prometheus-io/client": "^0.16.1",

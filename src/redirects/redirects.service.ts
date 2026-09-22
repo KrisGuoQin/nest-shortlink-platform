@@ -21,6 +21,8 @@ import {
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import { ShareAccessPayload, ShareAccessTokenService } from './share-access-token.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
+import { tracer } from '../telemetry/tracing.js';
+import { SpanStatusCode } from '@opentelemetry/api';
 
 interface RedirectRow {
     originalUrl: string;
@@ -32,6 +34,7 @@ export interface RedirectTarget {
     workspaceId: string;
     code: string;
     originalUrl: string;
+    cacheType?: "hit" | "negative" | "miss";
 }
 
 @Injectable()
@@ -44,7 +47,27 @@ export class RedirectsService {
         private readonly metrics: MetricsService,
     ) { }
 
-    async resolve(code: string, userId?: string, shareAccessToken?: string): Promise<RedirectTarget> {
+    async resolve(code: string, userId?: string, shareAccessToken?: string) {
+        return tracer.startActiveSpan('redirect.resolve', async (span) => {
+            try {
+                span.setAttribute('shortlink.code', code);
+                const result = await this.resolveInternal(code, userId, shareAccessToken);
+
+                span.setAttribute('shortlink.workspaceId', result.workspaceId);
+                span.setAttribute('shortlink.cache_result', result.cacheType ?? 'none');
+                span.setStatus({ code: SpanStatusCode.OK });
+                return result;
+            } catch (error) {
+                span.recordException(error instanceof Error ? error : new Error(String(error)));
+                span.setStatus({ code: SpanStatusCode.ERROR, message: error instanceof Error ? error.message : String(error) });
+                throw error;
+            } finally {
+                span.end();
+            }
+        })
+    }
+
+    async resolveInternal(code: string, userId?: string, shareAccessToken?: string): Promise<RedirectTarget> {
         const snapshot = await this.cache.getOrLoad(code, () =>
             this.loadFromDatabase(code),
         );
@@ -66,7 +89,8 @@ export class RedirectsService {
                 shortLinkId: snapshot.id,
                 workspaceId: snapshot.workspaceId,
                 code: snapshot.code,
-                originalUrl: snapshot.originalUrl
+                originalUrl: snapshot.originalUrl,
+                cacheType: snapshot.cacheType,
             };
         }
 
@@ -80,6 +104,7 @@ export class RedirectsService {
             shortLinkId: snapshot.id,
             workspaceId: snapshot.workspaceId,
             code: snapshot.code,
+            cacheType: snapshot.cacheType,
             originalUrl: snapshot.originalUrl
         };
     }

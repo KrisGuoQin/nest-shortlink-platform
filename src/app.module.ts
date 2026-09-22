@@ -22,6 +22,7 @@ import { AuditModule } from './audit/audit.module.js';
 import { PerfModule } from './perf/perf.module.js';
 import { MetricsModule } from './metrics/metrics.module.js';
 import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
+import { TraceIdMiddleware } from './telemetry/trace-id.middleware.js';
 
 @Module({
   imports: [
@@ -69,7 +70,10 @@ import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(HttpMetricsMiddleware)
+      .apply(
+        TraceIdMiddleware,
+        HttpMetricsMiddleware
+      )
       .forRoutes('*');
   }
 }

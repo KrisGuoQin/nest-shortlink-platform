@@ -133,6 +133,31 @@ services:
     ports:
       - '9093:9093'
 
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
+    container_name: shortlink-jaeger
+
+    ports:
+      - '16686:16686'
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.161.0
+
+    container_name: shortlink-otel-collector
+
+    command:
+      - '--config=/etc/otelcol/config.yml'
+
+    volumes:
+      - ./observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+
+    depends_on:
+      - jaeger
+
 volumes:
   postgres_data:
   rabbitmq_data:

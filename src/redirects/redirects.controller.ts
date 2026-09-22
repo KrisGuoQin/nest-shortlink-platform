@@ -12,6 +12,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { context as otelContext, propagation } from '@opentelemetry/api'
 
 import { ShortCodePipe } from './pipes/short-code.pipe.js';
 import { RedirectsService } from './redirects.service.js';
@@ -66,6 +67,10 @@ export class RedirectsController {
     );
     const secret = this.config.getOrThrow<string>('ANALYTICS_IP_HASH_SECRET');
 
+    // traceContext 是一个可选的字段，用于传递 trace context 信息，
+    // 以便在事件处理链中进行追踪和关联。它是一个键值对对象，通常包含 traceId、spanId 等信息。
+    const traceContext: Record<string, string> = {};
+    propagation.inject(otelContext.active(), traceContext);
     const event: ShortLinkVisitedEventV1 = {
       eventId: randomUUID(),
       shortLinkId: target.shortLinkId,
@@ -75,6 +80,7 @@ export class RedirectsController {
       ipHash: ip ? hashIp(ip, secret) : undefined,
       userAgent: request.get('user-agent')?.slice(0, 512),
       referer: request.get('referer')?.slice(0, 2048),
+      traceContext,
     };
 
     void this.visitEventPublisher

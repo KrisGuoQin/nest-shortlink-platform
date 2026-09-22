@@ -6,7 +6,8 @@ import type { Request, Response, NextFunction } from "express";
 export class HttpMetricsMiddleware implements NestMiddleware {
     constructor(private readonly metricsService: MetricsService) { }
     use(req: Request, res: Response, next: NextFunction): void {
-        if (req.path === "/metrics") {
+        if (req.originalUrl === "/metrics") {
+            console.log("Skipping metrics for /metrics endpoint");
             next();
             return;
         }
