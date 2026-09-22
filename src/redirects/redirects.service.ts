@@ -20,6 +20,7 @@ import {
 } from '../cache/redirect-cache.service.js';
 import { AuthorizationService } from '../authorization/authorization.service.js';
 import { ShareAccessPayload, ShareAccessTokenService } from './share-access-token.service.js';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 interface RedirectRow {
     originalUrl: string;
@@ -40,6 +41,7 @@ export class RedirectsService {
         private readonly cache: RedirectCacheService,
         private readonly authorization: AuthorizationService,
         private readonly shareToken: ShareAccessTokenService,
+        private readonly metrics: MetricsService,
     ) { }
 
     async resolve(code: string, userId?: string, shareAccessToken?: string): Promise<RedirectTarget> {
@@ -47,6 +49,7 @@ export class RedirectsService {
             this.loadFromDatabase(code),
         );
         if (!snapshot) {
+            this.metrics.redirectTotal.inc({ result: 'not_found' });
             throw new NotFoundException('Short link not found');
         }
 
@@ -112,9 +115,11 @@ export class RedirectsService {
     //   状态判断
     private assertAvailable(link: RedirectSnapshot) {
         if (link.status !== 'ACTIVE' || link.visibility !== 'PUBLIC') {
+            this.metrics.redirectTotal.inc({ result: 'disabled' });
             throw new NotFoundException('Short link not found');
         }
         if (link.expiresAt && new Date(link.expiresAt) <= new Date()) {
+            this.metrics.redirectTotal.inc({ result: 'expired' });
             throw new HttpException('Short link expired', HttpStatus.GONE);
         }
     }
@@ -157,6 +162,7 @@ export class RedirectsService {
 
         await this.cache.invalidate(snapshot.code)
 
+        this.metrics.redirectTotal.inc({ result: 'max_visits_exceeded' });
         throw new HttpException(
             'Short link unavailable or visit limit reached',
             HttpStatus.GONE,

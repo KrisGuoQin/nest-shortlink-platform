@@ -33,9 +33,12 @@ services:
       RABBITMQ_DEFAULT_USER: shortlink
       RABBITMQ_DEFAULT_PASS: shortlink
 
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"
     ports:
       - '5672:5672'
       - '15672:15672'
+      - '15692:15692'
 
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -46,6 +49,92 @@ services:
       timeout: 5s
       retries: 5
 
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
+
+    container_name: shortlink-postgres-exporter
+
+    environment:
+      DATA_SOURCE_URI: 'postgres:5432/shortlink?sslmode=disable'
+      DATA_SOURCE_USER: shortlink
+      DATA_SOURCE_PASS: shortlink
+
+    ports:
+      - '9187:9187'
+
+    depends_on:
+      - postgres
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.89.0
+
+    container_name: shortlink-redis-exporter
+
+    environment:
+      REDIS_ADDR: 'redis://redis:6379'
+
+    ports:
+      - '9121:9121'
+
+    depends_on:
+      - redis
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+
+    container_name: shortlink-prometheus
+
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+
+    ports:
+      - '9090:9090'
+
+    depends_on:
+      - postgres-exporter
+      - redis-exporter
+      - rabbitmq
+
+  grafana:
+    image: grafana/grafana:13.2.2
+
+    container_name: shortlink-grafana
+
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+
+    ports:
+      - '3001:3000'
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    depends_on:
+      - prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: shortlink-alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - '9093:9093'
+
 volumes:
   postgres_data:
   rabbitmq_data:
+  prometheus_data:
+  grafana_data:

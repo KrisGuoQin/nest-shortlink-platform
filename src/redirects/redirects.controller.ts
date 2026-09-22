@@ -27,6 +27,7 @@ import { ConfigService } from '@nestjs/config';
 import { ShortLinkVisitedEventV1 } from '../messaging/events/short-link-visited.event.js';
 import { randomUUID } from 'node:crypto';
 import { hashIp } from './hash-ip.js';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 @Controller('r')
 export class RedirectsController {
@@ -36,6 +37,7 @@ export class RedirectsController {
     private readonly redirectsService: RedirectsService,
     private readonly visitEventPublisher: VisitEventPublisher,
     private readonly config: ConfigService,
+    private readonly metrics: MetricsService,
   ) { }
 
   @Get(':code')
@@ -77,9 +79,16 @@ export class RedirectsController {
 
     void this.visitEventPublisher
       .publish(event)
-      .catch((error) =>
-        this.logger.error('Failed to publish visit event', error),
-      );
+      .then(() => {
+        this.metrics.visitEventPublishTotal.inc({ result: 'success' });
+      })
+      .catch((error) => {
+        this.metrics.visitEventPublishTotal.inc({ result: 'failed' });
+        this.logger.error(
+          `Failed to publish visit event for short link ${code}: ${error.message}`,
+          error.stack,
+        );
+      });
 
     return {
       url: target.originalUrl,

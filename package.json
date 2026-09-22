@@ -25,7 +25,8 @@
     "start:worker:dev": "nest start --entryFile analytics-worker/main --watch --tsc",
     "start:worker:prod": "node dist/analytics-worker/main.js",
     "start:outbox": "nest start --entryFile outbox-worker/main --tsc",
-    "start:outbox:dev": "nest start --entryFile outbox-worker/main --watch --tsc"
+    "start:outbox:dev": "nest start --entryFile outbox-worker/main --watch --tsc",
+    "start:app": "pnpm run start:dev & pnpm run start:worker:dev & pnpm run start:outbox:dev"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -37,6 +38,7 @@
     "@nestjs/platform-express": "^12.0.1",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@prometheus-io/client": "^0.16.1",
     "amqp-connection-manager": "^5.0.0",
     "amqplib": "^2.0.1",
     "argon2": "^0.45.1",

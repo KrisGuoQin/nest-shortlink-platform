@@ -1,0 +1,17 @@
+apiVersion: 1
+
+providers:
+  - name: ShortLink
+
+    orgId: 1
+
+    folder: ShortLink Platform
+
+    type: file
+
+    disableDeletion: false
+
+    editable: true
+
+    options:
+      path: /var/lib/grafana/dashboards

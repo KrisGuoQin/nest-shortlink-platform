@@ -1,0 +1,153 @@
+groups:
+  - name: shortlink-platform
+
+    rules:
+      - alert: ShortLinkApiDown
+
+        expr: >
+          up{
+            job="shortlink-api"
+          } == 0
+
+        for: 30s
+
+        labels:
+          severity: critical
+
+        annotations:
+          summary: ShortLink API is down
+
+          description: Prometheus cannot scrape ShortLink API.
+
+      - alert: ShortLinkHigh5xxRate
+
+        expr: >
+          (
+            sum(
+              rate(
+                shortlink_http_requests_total{
+                  status_code=~"5.."
+                }[5m]
+              )
+            )
+            /
+            clamp_min(
+              sum(
+                rate(
+                  shortlink_http_requests_total[5m]
+                )
+              ),
+              0.001
+            )
+          ) > 0.01
+
+        for: 2m
+
+        labels:
+          severity: warning
+
+        annotations:
+          summary: ShortLink 5xx rate is high
+
+          description: HTTP 5xx error rate has exceeded 1%.
+
+      - alert: ShortLinkHighP99Latency
+
+        expr: >
+          histogram_quantile(
+            0.99,
+            sum by (le) (
+              rate(
+                shortlink_http_request_duration_seconds_bucket{
+                  route="/r/:code"
+                }[5m]
+              )
+            )
+          ) > 0.1
+
+        for: 2m
+
+        labels:
+          severity: warning
+
+        annotations:
+          summary: Redirect P99 latency is high
+
+          description: Redirect P99 has exceeded 100ms.
+
+      - alert: ShortLinkEventLoopLagHigh
+
+        expr: >
+          nodejs_eventloop_lag_p99_seconds{
+            job="shortlink-api"
+          } > 0.1
+
+        for: 2m
+
+        labels:
+          severity: warning
+
+        annotations:
+          summary: Node.js event loop lag is high
+
+          description: Event loop P99 has exceeded 100ms.
+
+      - alert: ShortLinkRedisDown
+
+        expr: >
+          redis_up == 0
+
+        for: 30s
+
+        labels:
+          severity: critical
+
+        annotations:
+          summary: Redis is unavailable
+
+      - alert: ShortLinkPostgresDown
+
+        expr: >
+          pg_up == 0
+
+        for: 30s
+
+        labels:
+          severity: critical
+
+        annotations:
+          summary: PostgreSQL is unavailable
+
+      - alert: ShortLinkRabbitMQBacklog
+
+        expr: >
+          sum(
+            rabbitmq_detailed_queue_messages_ready
+          ) > 10000
+
+        for: 2m
+
+        labels:
+          severity: warning
+
+        annotations:
+          summary: RabbitMQ backlog is growing
+
+          description: More than 10,000 messages are waiting.
+
+      - alert: ShortLinkOutboxDead
+
+        expr: >
+          shortlink_outbox_events{
+            status="DEAD"
+          } > 0
+
+        for: 30s
+
+        labels:
+          severity: critical
+
+        annotations:
+          summary: Dead outbox events detected
+
+          description: At least one outbox event has exhausted retries.

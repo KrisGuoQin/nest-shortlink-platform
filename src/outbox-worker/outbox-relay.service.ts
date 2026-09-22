@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ConfigService } from '@nestjs/config';
 import { ConfirmPublisherService } from './confirm-publisher.service.js';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 interface ClaimedOutboxEvent {
     id: string;
@@ -22,6 +23,7 @@ export class OutboxRelayService {
         private readonly prisma: PrismaService,
         private readonly config: ConfigService,
         private readonly publisher: ConfirmPublisherService,
+        private readonly metrics: MetricsService,
     ) { }
 
     async run() {
@@ -115,6 +117,7 @@ export class OutboxRelayService {
                     lastError: null,
                 },
             });
+            this.metrics.outboxPublishTotal.inc({ result: 'published' });
         } catch (error) {
             await this.handleFailure(event, error);
         }
@@ -143,6 +146,8 @@ export class OutboxRelayService {
                 lastError: message,
             },
         });
+
+        this.metrics.outboxPublishTotal.inc({ result: dead ? 'dead' : 'retry' });
         this.logger.error(
             `Publish failed event=${event.id} attempts=${event.attempts}`,
         );

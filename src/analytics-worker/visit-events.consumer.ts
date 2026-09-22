@@ -9,12 +9,16 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { ShortLinkVisitedEventV1 } from '../messaging/events/short-link-visited.event.js';
 
 import { SHORT_LINK_VISITED_PATTERN } from '../messaging/messaging.constants.js';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 @Controller()
 export class VisitEventsConsumer {
     private readonly logger = new Logger(VisitEventsConsumer.name);
 
-    constructor(private readonly prisma: PrismaService) { }
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly metrics: MetricsService,
+    ) { }
 
     @EventPattern(SHORT_LINK_VISITED_PATTERN)
     async handleVisited(
@@ -58,6 +62,8 @@ export class VisitEventsConsumer {
                 process.exit(1);
             }
 
+            this.metrics.analyticsEventsTotal.inc({ result: 'processed' });
+
             channel.ack(message);
         } catch (error) {
             if (
@@ -67,6 +73,7 @@ export class VisitEventsConsumer {
                 this.logger.warn(`Duplicate event ignored: ${event.eventId}`);
 
                 channel.ack(message);
+                this.metrics.analyticsEventsTotal.inc({ result: 'duplicate' });
 
                 return;
             }
@@ -74,6 +81,7 @@ export class VisitEventsConsumer {
             this.logger.error(`Failed event: ${event.eventId}`, error);
 
             channel.nack(message, false, true);
+            this.metrics.analyticsEventsTotal.inc({ result: 'requeued' });
         }
     }
 }

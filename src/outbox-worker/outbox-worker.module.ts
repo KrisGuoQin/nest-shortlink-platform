@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { ConfirmPublisherService } from './confirm-publisher.service.js';
 import { OutboxRelayService } from './outbox-relay.service.js';
+import { MetricsModule } from '../metrics/metrics.module.js';
+import { OutboxMetricsService } from './outbox-metrics.service.js';
 
 @Module({
     imports: [
@@ -10,10 +12,12 @@ import { OutboxRelayService } from './outbox-relay.service.js';
             isGlobal: true,
         }),
         PrismaModule,
+        MetricsModule,
     ],
     providers: [
         ConfirmPublisherService,
-        OutboxRelayService
+        OutboxRelayService,
+        OutboxMetricsService,
     ]
 })
 export class OutboxWorkerModule { }

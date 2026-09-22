@@ -5,6 +5,10 @@ import { NestFactory } from '@nestjs/core';
 import { OutboxRelayService } from './outbox-relay.service.js';
 
 import { OutboxWorkerModule } from './outbox-worker.module.js';
+import { MetricsService } from '../metrics/metrics.service.js';
+import { startMetricsHttpServer } from '../metrics/metrics-http-server.js';
+
+process.env.METRICS_SERVICE_NAME = 'outbox-worker';
 
 async function bootstrap() {
     const app = await NestFactory.createApplicationContext(OutboxWorkerModule);
@@ -12,6 +16,7 @@ async function bootstrap() {
     app.enableShutdownHooks();
 
     const relay = app.get(OutboxRelayService);
+    const metrics = app.get(MetricsService);
 
     const shutdown = async () => {
         relay.stop();
@@ -28,6 +33,9 @@ async function bootstrap() {
 
         process.exitCode = 1;
     });
+
+    startMetricsHttpServer(metrics, 9466);
+    console.log('Outbox worker is running');
 }
 
 bootstrap();

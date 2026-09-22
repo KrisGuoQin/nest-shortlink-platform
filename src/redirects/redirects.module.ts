@@ -6,9 +6,15 @@ import { JwtModule } from '@nestjs/jwt';
 import { ShareAccessTokenService } from './share-access-token.service.js';
 import { AuthorizationModule } from '../authorization/authorization.module.js';
 import { MessagingModule } from '../messaging/messaging.module.js';
+import { MetricsModule } from '../metrics/metrics.module.js';
 
 @Module({
-  imports: [JwtModule.register({}), AuthorizationModule, MessagingModule],
+  imports: [
+    JwtModule.register({}),
+    AuthorizationModule,
+    MessagingModule,
+    MetricsModule,
+  ],
   controllers: [RedirectsController],
   providers: [RedirectsService, ShortCodePipe, ShareAccessTokenService],
 })

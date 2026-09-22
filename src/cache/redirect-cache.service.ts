@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service.js';
 import { randomUUID } from 'node:crypto';
+import { MetricsService } from '../metrics/metrics.service.js';
 
 export interface RedirectSnapshot {
     id: string;
@@ -27,7 +28,10 @@ export class RedirectCacheService {
     private readonly NEGATIVE_TTL_SECONDS = 30;
     private readonly LOCK_TTL_MS = 3_000;
 
-    constructor(private readonly redis: RedisService) { }
+    constructor(
+        private readonly redis: RedisService,
+        private readonly metrics: MetricsService,
+    ) { }
 
     private cacheKey(code: string) {
         return `redirect:v2:${code}`;
@@ -62,6 +66,8 @@ export class RedirectCacheService {
             const cached = await this.readCache(code);
 
             this.logger.log(`cached: `, cached.type)
+
+            this.metrics.redirectCacheTotal.inc({ result: cached.type });
 
             if (cached.type === 'hit') {
                 return cached.value;

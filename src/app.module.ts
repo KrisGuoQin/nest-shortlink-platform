@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config'
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -20,6 +20,8 @@ import { RateLimitGuard } from './rate-limit/guards/rate-limit.guard.js';
 import { MessagingModule } from './messaging/messaging.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { PerfModule } from './perf/perf.module.js';
+import { MetricsModule } from './metrics/metrics.module.js';
+import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { PerfModule } from './perf/perf.module.js';
     MessagingModule,
     AuditModule,
     PerfModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -63,4 +66,10 @@ import { PerfModule } from './perf/perf.module.js';
     }
   ],
 })
-export class AppModule { }
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(HttpMetricsMiddleware)
+      .forRoutes('*');
+  }
+}
