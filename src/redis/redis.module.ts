@@ -17,6 +17,14 @@ import { RedisClusterService } from './redis-cluster.service.js';
         const rawNodes =
           config.get<string>('REDIS_CLUSTER_NODES') ??
           '127.0.0.1:7100,127.0.0.1:7101,127.0.0.1:7102';
+        const commandTimeoutMs = Number(
+          config.get<string>('REDIS_COMMAND_TIMEOUT_MS') ?? '300',
+        );
+
+        if (!Number.isInteger(commandTimeoutMs) || commandTimeoutMs <= 0) {
+          throw new Error('REDIS_COMMAND_TIMEOUT_MS must be a positive integer');
+        }
+
         const nodes = rawNodes.split(',').map((entry) => {
           const [host, rawPort] = entry.trim().split(':');
           const port = Number(rawPort);
@@ -37,7 +45,7 @@ import { RedisClusterService } from './redis-cluster.service.js';
           retryDelayOnFailover: 100,
           redisOptions: {
             connectTimeout: 1000,
-            commandTimeout: 300,
+            commandTimeout: commandTimeoutMs,
             maxRetriesPerRequest: 1,
           },
           clusterRetryStrategy(times) {

@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service.js';
 import { MetricsService } from '../metrics/metrics.service.js';
 import { ShortLinkResolveCacheService } from './short-link-resolve-cache.service.js';
+import { RedisClusterService } from '../redis/redis-cluster.service.js';
+import { CacheCircuitBreakerService } from './cache-circuit-breaker.service.js';
 
 export interface RedirectSnapshot {
   id: string;
@@ -28,6 +30,8 @@ export class RedirectCacheService {
     private readonly redis: RedisService,
     private readonly metrics: MetricsService,
     private readonly resolveCache: ShortLinkResolveCacheService,
+    private readonly redisCluster: RedisClusterService,
+    private readonly cacheCircuitBreaker: CacheCircuitBreakerService,
   ) {}
 
   private visitKey(linkId: string) {
@@ -38,11 +42,33 @@ export class RedirectCacheService {
     code: string,
     loader: Loader,
   ): Promise<RedirectSnapshot | null> {
+    const permit = this.cacheCircuitBreaker.acquire();
+
+    if (permit === 'bypass') {
+      this.metrics.redirectCacheTotal.inc({ result: 'circuit-open' });
+      return this.loadFromDatabase(loader);
+    }
+
+    let databaseLoaderFailed = false;
+
     try {
+      if (permit === 'probe') {
+        await this.redisCluster.ping();
+      }
+
       const cached = await this.resolveCache.resolve(code, async () => {
-        const snapshot = await loader();
+        let snapshot: RedirectSnapshot | null;
+        try {
+          snapshot = await loader();
+        } catch (error) {
+          databaseLoaderFailed = true;
+          throw error;
+        }
+
         return snapshot ? JSON.stringify(snapshot) : null;
       });
+
+      this.cacheCircuitBreaker.recordSuccess();
       this.metrics.redirectCacheTotal.inc({ result: cached.layer });
 
       if (cached.value === null) {
@@ -54,19 +80,28 @@ export class RedirectCacheService {
         ...snapshot,
         cacheType: cached.layer === 'db' ? 'miss' : 'hit',
       };
-    } catch {
-      this.logger.warn(`Redis unavailable, falling back to DB for ${code}`);
-
-      const result = await loader();
-      if (!result) {
-        return null;
+    } catch (error) {
+      if (databaseLoaderFailed) {
+        throw error;
       }
 
-      return {
-        ...result,
-        cacheType: 'miss',
-      };
+      this.cacheCircuitBreaker.recordFailure();
+      this.metrics.redirectCacheTotal.inc({ result: 'redis-error' });
+      this.logger.warn(`Redis unavailable, falling back to DB for ${code}`);
+      return this.loadFromDatabase(loader);
     }
+  }
+
+  private async loadFromDatabase(loader: Loader) {
+    const result = await loader();
+    if (!result) {
+      return null;
+    }
+
+    return {
+      ...result,
+      cacheType: 'miss' as const,
+    };
   }
 
   /**

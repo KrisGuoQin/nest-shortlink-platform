@@ -41,6 +41,10 @@ export class RedisClusterService implements OnModuleDestroy {
     return this.client.get(key);
   }
 
+  async ping() {
+    return this.client.ping();
+  }
+
   async set(key: string, value: string, ttlSeconds?: number) {
     if (ttlSeconds) {
       return this.client.set(key, value, 'EX', ttlSeconds);
