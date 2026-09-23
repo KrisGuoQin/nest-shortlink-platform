@@ -44,7 +44,8 @@ const permissions = [
   ['link:read', 'Read link'],
   ['link:update', 'Update link'],
   ['link:delete', 'Delete link'],
-  ['audit:read', 'Read audit logs']
+  ['audit:read', 'Read audit logs'],
+  ['analytics:read', 'Read workspace analytics']
 ] as const;
 
 const roleDefinitions = {
@@ -66,7 +67,8 @@ const roleDefinitions = {
     'link:update',
     'link:delete',
 
-    'audit:read'
+    'audit:read',
+    'analytics:read'
   ],
 
   MEMBER: [
@@ -77,6 +79,7 @@ const roleDefinitions = {
     'link:read',
     'link:update',
     'link:delete',
+    'analytics:read',
   ],
 };
 

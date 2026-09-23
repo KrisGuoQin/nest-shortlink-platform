@@ -25,6 +25,7 @@ import { HttpMetricsMiddleware } from './metrics/http-metrics.middleware.js';
 import { TraceIdMiddleware } from './telemetry/trace-id.middleware.js';
 import { HealthModule } from './health/health.module.js';
 import { InstanceIdMiddleware } from './common/middleware/instance-id.middleware.js';
+import { AnalyticsModule } from './analytics/analytics.module.js';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { InstanceIdMiddleware } from './common/middleware/instance-id.middleware
     PerfModule,
     MetricsModule,
     HealthModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
