@@ -1,0 +1,13 @@
+services:
+  redis-cluster:
+    build: .
+    container_name: redis-cluster-lab
+
+    ports:
+      - '7100-7105:7100-7105'
+
+    volumes:
+      - redis-cluster-data:/data
+
+volumes:
+  redis-cluster-data:
