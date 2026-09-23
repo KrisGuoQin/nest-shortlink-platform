@@ -10,7 +10,6 @@ import * as argon2 from 'argon2'
 
 import {
     ShortLinkStatus,
-    ShortLinkVisibility,
 } from '../generated/prisma/client.js';
 
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -46,6 +45,18 @@ export class RedirectsService {
         private readonly shareToken: ShareAccessTokenService,
         private readonly metrics: MetricsService,
     ) { }
+
+    async getVisibility(code: string) {
+        const snapshot = await this.cache.getOrLoad(code, () =>
+            this.loadFromDatabase(code),
+        );
+        if (!snapshot) {
+            this.metrics.redirectTotal.inc({ result: 'not_found' });
+            throw new NotFoundException('Short link not found');
+        }
+        this.assertAvailable(snapshot);
+        return snapshot.visibility;
+    }
 
     async resolve(code: string, userId?: string, shareAccessToken?: string) {
         return tracer.startActiveSpan('redirect.resolve', async (span) => {
@@ -139,7 +150,7 @@ export class RedirectsService {
 
     //   状态判断
     private assertAvailable(link: RedirectSnapshot) {
-        if (link.status !== 'ACTIVE' || link.visibility !== 'PUBLIC') {
+        if (link.status !== 'ACTIVE') {
             this.metrics.redirectTotal.inc({ result: 'disabled' });
             throw new NotFoundException('Short link not found');
         }
@@ -238,82 +249,16 @@ export class RedirectsService {
             throw new UnauthorizedException('Authentication required');
         }
 
-        /*
-         * Creator 永远可以访问。
-         */
-        if (userId === link.createdById) {
-            return;
-        }
-
-        /*
-         * Workspace OWNER / ADMIN
-         * 可以访问 Workspace 中的资源。
-         */
-        const workspaceAccess = await this.authorization.getWorkspaceAccess(
-            userId,
-            link.workspaceId,
-        );
-
-        if (
-            workspaceAccess &&
-            (workspaceAccess.roles.includes('OWNER') ||
-                workspaceAccess.roles.includes('ADMIN'))
-        ) {
-            return;
-        }
-
-        /*
-         * 最后检查显式用户授权。
-         */
-        const share = await this.prisma.shortLinkShareUser.findUnique({
-            where: {
-                shortLinkId_userId: {
-                    shortLinkId: link.id,
-
-                    userId,
-                },
-            },
-
-            select: {
-                userId: true,
-            },
-        });
-
-        if (!share) {
+        if (userId !== link.createdById) {
             throw new NotFoundException('Short link not found');
         }
     }
 
     private async authorizePassword(
         link: RedirectSnapshot,
-        userId?: string,
+        _userId?: string,
         token?: string,
     ) {
-        /*
-         * Creator 可以直接访问。
-         */
-        if (userId === link.createdById) {
-            return;
-        }
-
-        /*
-         * OWNER / ADMIN
-         * 可以直接访问。
-         */
-        if (userId) {
-            const access = await this.authorization.getWorkspaceAccess(
-                userId,
-                link.workspaceId,
-            );
-
-            if (
-                access &&
-                (access.roles.includes('OWNER') || access.roles.includes('ADMIN'))
-            ) {
-                return;
-            }
-        }
-
         if (!token) {
             throw new ForbiddenException('Share password required');
         }
@@ -404,8 +349,7 @@ export class RedirectsService {
         }
 
         if (
-            link.status !== ShortLinkStatus.ACTIVE ||
-            link.visibility !== ShortLinkVisibility.PUBLIC
+            link.status !== ShortLinkStatus.ACTIVE
         ) {
             throw new NotFoundException('Short link not found');
         }

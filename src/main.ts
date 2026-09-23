@@ -19,6 +19,13 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter())
 
+  const frontendBaseUrl = process.env.FRONTEND_BASE_URL ?? 'http://localhost:5173';
+  app.enableCors({
+    origin: new URL(frontendBaseUrl).origin,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-share-access-token'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
 

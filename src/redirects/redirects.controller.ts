@@ -11,6 +11,7 @@ import {
   Redirect,
   Req,
   Res,
+  Headers,
 } from '@nestjs/common';
 import { context as otelContext, propagation } from '@opentelemetry/api'
 
@@ -57,6 +58,21 @@ export class RedirectsController {
     @Param('code', ShortCodePipe) code: string,
     @Req() request: OptionalAuthenticatedRequest,
   ) {
+    const visibility = await this.redirectsService.getVisibility(code);
+    if (visibility !== 'PUBLIC' && !request.user) {
+      const frontendBaseUrl = this.config.get<string>(
+        'FRONTEND_BASE_URL',
+        'http://localhost:5173',
+      );
+      const accessPage = visibility === 'PASSWORD'
+        ? new URL(`/access/password/${encodeURIComponent(code)}`, frontendBaseUrl)
+        : new URL('/access/login', frontendBaseUrl);
+      if (visibility !== 'PASSWORD') {
+        accessPage.searchParams.set('code', code);
+      }
+      return { url: accessPage.toString(), statusCode: HttpStatus.FOUND };
+    }
+
     const cookieName = getShareCookieName(code);
     const shareToken = request.cookies?.[cookieName];
     const ip = request.ip || request.socket.remoteAddress || '';
@@ -65,6 +81,41 @@ export class RedirectsController {
       request.user?.sub,
       shareToken,
     );
+    this.publishVisit(code, target, request, ip);
+
+    return {
+      url: target.originalUrl,
+      statusCode: HttpStatus.FOUND,
+    };
+  }
+
+  @Post(':code/access')
+  @OptionalAuth()
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'no-store')
+  async resolveAccess(
+    @Param('code', ShortCodePipe) code: string,
+    @Req() request: OptionalAuthenticatedRequest,
+    @Headers('x-share-access-token') shareAccessToken?: string,
+  ) {
+    const cookieName = getShareCookieName(code);
+    const shareToken = shareAccessToken || request.cookies?.[cookieName];
+    const target = await this.redirectsService.resolve(
+      code,
+      request.user?.sub,
+      shareToken,
+    );
+    const ip = request.ip || request.socket.remoteAddress || '';
+    this.publishVisit(code, target, request, ip);
+    return { url: target.originalUrl };
+  }
+
+  private publishVisit(
+    code: string,
+    target: Awaited<ReturnType<RedirectsService['resolve']>>,
+    request: OptionalAuthenticatedRequest,
+    ip: string,
+  ) {
     const secret = this.config.getOrThrow<string>('ANALYTICS_IP_HASH_SECRET');
 
     // traceContext 是一个可选的字段，用于传递 trace context 信息，
@@ -95,11 +146,6 @@ export class RedirectsController {
           error.stack,
         );
       });
-
-    return {
-      url: target.originalUrl,
-      statusCode: HttpStatus.FOUND,
-    };
   }
 
   @Post(':code/unlock')
@@ -121,6 +167,7 @@ export class RedirectsController {
 
     return {
       unlock: true,
+      token: result.token,
       expiresIn: result.expiresIn,
     };
   }
