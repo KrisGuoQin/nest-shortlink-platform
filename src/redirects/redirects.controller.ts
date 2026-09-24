@@ -13,7 +13,7 @@ import {
   Res,
   Headers,
 } from '@nestjs/common';
-import { context as otelContext, propagation } from '@opentelemetry/api'
+import { context as otelContext, propagation } from '@opentelemetry/api';
 
 import { ShortCodePipe } from './pipes/short-code.pipe.js';
 import { RedirectsService } from './redirects.service.js';
@@ -40,7 +40,7 @@ export class RedirectsController {
     private readonly visitEventPublisher: VisitEventPublisher,
     private readonly config: ConfigService,
     private readonly metrics: MetricsService,
-  ) { }
+  ) {}
 
   @Get(':code')
   @OptionalAuth()
@@ -64,9 +64,13 @@ export class RedirectsController {
         'FRONTEND_BASE_URL',
         'http://localhost:5173',
       );
-      const accessPage = visibility === 'PASSWORD'
-        ? new URL(`/access/password/${encodeURIComponent(code)}`, frontendBaseUrl)
-        : new URL('/access/login', frontendBaseUrl);
+      const accessPage =
+        visibility === 'PASSWORD'
+          ? new URL(
+              `/access/password/${encodeURIComponent(code)}`,
+              frontendBaseUrl,
+            )
+          : new URL('/access/login', frontendBaseUrl);
       if (visibility !== 'PASSWORD') {
         accessPage.searchParams.set('code', code);
       }
@@ -128,6 +132,7 @@ export class RedirectsController {
       workspaceId: target.workspaceId,
       shortCode: target.code,
       occurredAt: new Date().toISOString(),
+      databaseVisitCountIncremented: target.databaseVisitCountIncremented,
       ipHash: ip ? hashIp(ip, secret) : undefined,
       userAgent: request.get('user-agent')?.slice(0, 512),
       referer: request.get('referer')?.slice(0, 2048),
