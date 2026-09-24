@@ -123,7 +123,13 @@ for (const [script, entryPoint] of Object.entries({
 })) {
   assertPreloaded(packageJson.scripts[script], entryPoint);
 }
-assertPreloaded(readFileSync(`${cwd}/Dockerfile`, 'utf8'), './dist/main.js');
+const dockerfile = readFileSync(`${cwd}/Dockerfile`, 'utf8');
+assertPreloaded(dockerfile, './dist/main.js');
+assert.match(
+  dockerfile,
+  /prisma migrate deploy[^\n]+&& pnpm run seed:rbac/,
+  'migration image must initialize RBAC after applying migrations',
+);
 for (const serviceName of ['analytics-worker', 'outbox-worker']) {
   const command = prod.services[serviceName].command.join(' ');
   assertPreloaded(command, `dist/${serviceName}/main.js`);
@@ -140,6 +146,7 @@ assert.equal(
   prod.services.api.environment.OTEL_TRACES_SAMPLER,
   'parentbased_traceidratio',
 );
+assert.equal(prod.services.jaeger.image, 'jaegertracing/jaeger:2.21.0');
 assert.deepEqual(prod.services.jaeger.command, [
   '--set=extensions.jaeger_storage.backends.some_storage.memory.max_traces=5000',
 ]);

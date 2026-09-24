@@ -250,7 +250,8 @@ services:
   jaeger:
     logging: *logging
     restart: unless-stopped
-    image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
+    # Use the Docker Hub name so configured registry mirrors also cover Jaeger.
+    image: ${JAEGER_IMAGE:-jaegertracing/jaeger:2.21.0}
 
     ports:
       - '127.0.0.1:16686:16686'

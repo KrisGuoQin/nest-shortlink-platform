@@ -114,6 +114,8 @@ bash scripts/compose.sh prod up -d --build --wait
 | Redis exporter                             | 64 MiB                           |
 | 一次性 migrate                             | 768 MiB，完成后退出              |
 
+`migrate` 容器会先执行 `prisma migrate deploy`，成功后再幂等执行 RBAC seed，确保 `OWNER`、`ADMIN`、`MEMBER` 以及对应权限在 API 启动前已经存在。任何一步失败都会阻止 API 启动。
+
 常驻容器上限合计约 6.44 GiB，不代表会预先占满；系统、Docker 和构建也需要内存。
 这是初始预算，负载下可用 `docker stats` 查看 OOM 和占用后调整。2 核机器共享 CPU，不做每服务独占核分配。
 建议后续由 CI 构建镜像，避免在生产机编译时与业务争抢资源。
@@ -204,5 +206,7 @@ Prometheus 在 `http://localhost:9090/targets` 显示各 API、worker、数据�
 
 基础设施镜像都在本地时，`up --build` 可利用缓存。若基础镜像下载失败，应单独解决 Docker Registry 连通性。
 后续使用 CI 镜像时同时设置 `API_IMAGE`、`MIGRATION_IMAGE`、`REDIS_CLUSTER_IMAGE`；迁移镜像必须来自 Dockerfile 的 `migration` target，不能用 runtime 镜像替代。
+
+若中国大陆云主机无法直连 Docker Hub，可在 Docker daemon 中配置可信的镜像代理。Jaeger 使用可配置的 `JAEGER_IMAGE`；默认值 `jaegertracing/jaeger:2.21.0` 能被 Docker Hub 的 `registry-mirrors` 接管。也可在 `.env.production` 中显式写入代理后的完整地址，例如 `m.daocloud.io/docker.io/jaegertracing/jaeger:2.21.0`。使用第三方代理前应确认其可信度，生产环境最好将依赖镜像同步到自己的镜像仓库并固定 digest。
 
 参考：[Nginx upstream DNS](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#resolve)、[Prometheus DNS discovery](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#dns_sd_config)。

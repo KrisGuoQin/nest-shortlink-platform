@@ -28,8 +28,10 @@ FROM dependencies AS migration
 
 COPY prisma ./prisma
 COPY prisma7.config.ts ./
+COPY scripts/seed-rbac.ts ./scripts/seed-rbac.ts
+COPY --from=builder /app/src/generated ./src/generated
 
-CMD ["pnpm", "exec", "prisma", "migrate", "deploy", "--config", "prisma7.config.ts"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy --config prisma7.config.ts && pnpm run seed:rbac"]
 
 FROM base AS production-dependencies
 
