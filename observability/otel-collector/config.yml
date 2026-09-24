@@ -8,14 +8,29 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
-  batch: {}
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 192
+    spike_limit_mib: 64
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
 
 exporters:
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: jaeger:4317
-
     tls:
       insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 10s
+      max_elapsed_time: 60s
 
 service:
   pipelines:
@@ -24,7 +39,8 @@ service:
         - otlp
 
       processors:
+        - memory_limiter
         - batch
 
       exporters:
-        - otlp/jaeger
+        - otlp_grpc/jaeger

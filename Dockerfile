@@ -21,7 +21,7 @@ FROM dependencies AS builder
 
 COPY . .
 
-RUN pnpm exec prisma generate
+RUN pnpm exec prisma generate --config prisma7.config.ts
 RUN pnpm build
 
 FROM dependencies AS migration
@@ -29,7 +29,7 @@ FROM dependencies AS migration
 COPY prisma ./prisma
 COPY prisma7.config.ts ./
 
-CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
+CMD ["pnpm", "exec", "prisma", "migrate", "deploy", "--config", "prisma7.config.ts"]
 
 FROM base AS production-dependencies
 

@@ -1,67 +1,74 @@
-x-api-common: &api-common
+# Shared services; default mode proxies to the API started on the host.
+# scripts/compose.sh selects dev / demo / prod.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-app: &app
+  logging: *logging
   build:
     context: .
     target: runtime
-  image: shortlink-api:local
+  image: ${API_IMAGE:-shortlink-api:local}
   env_file:
-    - .env.docker
+    - ${APP_ENV_FILE:-.env.docker}
   restart: unless-stopped
+  stop_grace_period: 30s
+  networks: [shortlink]
   depends_on:
     migrate:
       condition: service_completed_successfully
-    redis:
-      condition: service_healthy
     rabbitmq:
       condition: service_healthy
-  stop_grace_period: 30s
-  healthcheck:
-    test:
-      [
-        'CMD',
-        'node',
-        '-e',
-        "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
-      ]
-    interval: 5s
-    timeout: 3s
-    retries: 10
-  networks:
-    - shortlink
+    otel-collector:
+      condition: service_started
 
 services:
   nginx:
+    logging: *logging
     image: nginx:1.30.5-alpine
 
-    container_name: shortlink-nginx
-
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro,z
 
     ports:
-      - '8080:80'
+      - '127.0.0.1:8080:80'
 
-    depends_on:
-      api-1:
-        condition: service_healthy
-
-      api-2:
-        condition: service_healthy
-
-      api-3:
-        condition: service_healthy
-
+    environment:
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
+      NGINX_ENVSUBST_FILTER: '^(API_UPSTREAM|API_RESOLVE|DEBUG_UPSTREAM)$'
+      API_UPSTREAM: host.docker.internal:3000
+      API_RESOLVE: ''
+      DEBUG_UPSTREAM: '$$upstream_addr'
+    extra_hosts: ['host.docker.internal:host-gateway']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '-O',
+          '/dev/null',
+          'http://127.0.0.1/nginx-health',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
     restart: unless-stopped
 
     networks:
       - shortlink
 
   postgres:
+    logging: *logging
+    restart: unless-stopped
     image: postgres:17-alpine
-    container_name: shortlink-postgres
 
     environment:
       POSTGRES_USER: shortlink
-      POSTGRES_PASSWORD: shortlink
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shortlink}
       POSTGRES_DB: shortlink
 
     healthcheck:
@@ -71,18 +78,41 @@ services:
       retries: 10
 
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - shortlink
 
+  redis-cluster:
+    logging: *logging
+    build: ./infra/redis-cluster
+    image: ${REDIS_CLUSTER_IMAGE:-shortlink-redis-cluster:local}
+    environment:
+      REDIS_CLUSTER_HOSTNAME: ''
+    ports: ['127.0.0.1:7100-7105:7100-7105']
+    volumes: [redis_cluster_data:/data]
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'redis-cli -p 7100 cluster info | grep -q "cluster_state:ok"',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks: [shortlink]
+
   redis:
+    logging: *logging
+    restart: unless-stopped
     image: redis:8-alpine
-    container_name: shortlink-redis
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -92,19 +122,21 @@ services:
       - shortlink
 
   rabbitmq:
+    logging: *logging
+    restart: unless-stopped
+    hostname: rabbitmq
     image: rabbitmq:4-management
-    container_name: shortlink-rabbitmq
 
     environment:
       RABBITMQ_DEFAULT_USER: shortlink
-      RABBITMQ_DEFAULT_PASS: shortlink
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-shortlink}
 
     command: >
       sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus && rabbitmq-server"
     ports:
-      - '5672:5672'
-      - '15672:15672'
-      - '15692:15692'
+      - '127.0.0.1:5672:5672'
+      - '127.0.0.1:15672:15672'
+      - '127.0.0.1:15692:15692'
 
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -118,17 +150,17 @@ services:
       - shortlink
 
   postgres-exporter:
+    logging: *logging
+    restart: unless-stopped
     image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
-
-    container_name: shortlink-postgres-exporter
 
     environment:
       DATA_SOURCE_URI: 'postgres:5432/shortlink?sslmode=disable'
       DATA_SOURCE_USER: shortlink
-      DATA_SOURCE_PASS: shortlink
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:-shortlink}
 
     ports:
-      - '9187:9187'
+      - '127.0.0.1:9187:9187'
 
     depends_on:
       - postgres
@@ -136,15 +168,15 @@ services:
       - shortlink
 
   redis-exporter:
+    logging: *logging
+    restart: unless-stopped
     image: oliver006/redis_exporter:v1.89.0
-
-    container_name: shortlink-redis-exporter
 
     environment:
       REDIS_ADDR: 'redis://redis:6379'
 
     ports:
-      - '9121:9121'
+      - '127.0.0.1:9121:9121'
 
     depends_on:
       - redis
@@ -152,23 +184,25 @@ services:
       - shortlink
 
   prometheus:
+    logging: *logging
+    restart: unless-stopped
+    extra_hosts: ['host.docker.internal:host-gateway']
     image: prom/prometheus:v3.14.0
-
-    container_name: shortlink-prometheus
 
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=7d'
-      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.size=2GB'
 
     volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro,z
+      - ./observability/prometheus/targets/dev.yml:/etc/prometheus/api-targets.yml:ro,z
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro,z
       - prometheus_data:/prometheus
 
     ports:
-      - '9090:9090'
+      - '127.0.0.1:9091:9090'
 
     depends_on:
       - postgres-exporter
@@ -178,21 +212,21 @@ services:
       - shortlink
 
   grafana:
+    logging: *logging
+    restart: unless-stopped
     image: grafana/grafana:13.2.2
-
-    container_name: shortlink-grafana
 
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
 
     ports:
-      - '3001:3000'
+      - '127.0.0.1:3001:3000'
 
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro,z
 
     depends_on:
       - prometheus
@@ -200,55 +234,56 @@ services:
       - shortlink
 
   alertmanager:
+    logging: *logging
+    restart: unless-stopped
     image: prom/alertmanager:v0.34.1
-    container_name: shortlink-alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
     volumes:
-      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+      - alertmanager_data:/alertmanager
     ports:
-      - '9093:9093'
+      - '127.0.0.1:9093:9093'
     networks:
       - shortlink
 
   jaeger:
+    logging: *logging
+    restart: unless-stopped
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.21.0
-    container_name: shortlink-jaeger
 
     ports:
-      - '16686:16686'
+      - '127.0.0.1:16686:16686'
     networks:
       - shortlink
 
   otel-collector:
+    logging: *logging
+    restart: unless-stopped
     image: otel/opentelemetry-collector:0.161.0
-
-    container_name: shortlink-otel-collector
 
     command:
       - '--config=/etc/otelcol/config.yml'
 
     volumes:
-      - ./observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+      - ./observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro,z
 
     ports:
-      - '4317:4317'
-      - '4318:4318'
+      - '127.0.0.1:4317:4317'
+      - '127.0.0.1:4318:4318'
 
     depends_on:
       - jaeger
+    networks:
+      - shortlink
 
   analytics-worker:
-    image: shortlink-api:local
-
-    env_file:
-      - .env.docker
-
+    logging: *logging
+    <<: *app
     environment:
       OTEL_SERVICE_NAME: analytics-worker
-
-      DB_POOL_MAX: 5
-
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      DB_POOL_MAX: 3
     command:
       [
         'node',
@@ -257,28 +292,13 @@ services:
         'dist/analytics-worker/main.js',
       ]
 
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
-      rabbitmq:
-        condition: service_healthy
-
-    restart: unless-stopped
-
-    networks:
-      - shortlink
-
   outbox-worker:
-    image: shortlink-api:local
-
-    env_file:
-      - .env.docker
-
+    logging: *logging
+    <<: *app
     environment:
       OTEL_SERVICE_NAME: outbox-worker
-      DB_POOL_MAX: 5
-
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      DB_POOL_MAX: 3
     command:
       [
         'node',
@@ -287,63 +307,14 @@ services:
         'dist/outbox-worker/main.js',
       ]
 
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-
-      rabbitmq:
-        condition: service_healthy
-
-    restart: unless-stopped
-
-    networks:
-      - shortlink
-
-  api-1:
-    <<: *api-common
-
-    environment:
-      APP_INSTANCE_ID: api-1
-      OTEL_SERVICE_NAME: shortlink-api
-      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-1
-
-    ports:
-      - '127.0.0.1:3101:3000'
-    networks:
-      - shortlink
-
-  api-2:
-    <<: *api-common
-
-    environment:
-      APP_INSTANCE_ID: api-2
-      OTEL_SERVICE_NAME: shortlink-api
-      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-2
-
-    ports:
-      - '127.0.0.1:3102:3000'
-    networks:
-      - shortlink
-
-  api-3:
-    <<: *api-common
-
-    environment:
-      APP_INSTANCE_ID: api-3
-      OTEL_SERVICE_NAME: shortlink-api
-      OTEL_RESOURCE_ATTRIBUTES: service.instance.id=api-3
-
-    ports:
-      - '127.0.0.1:3103:3000'
-    networks:
-      - shortlink
-
   migrate:
+    logging: *logging
+    image: ${MIGRATION_IMAGE:-shortlink-migration:local}
     build:
       context: .
       target: migration
     env_file:
-      - .env.docker
+      - ${APP_ENV_FILE:-.env.docker}
     depends_on:
       postgres:
         condition: service_healthy
@@ -352,6 +323,8 @@ services:
       - shortlink
 
 volumes:
+  redis_cluster_data:
+  alertmanager_data:
   postgres_data:
   rabbitmq_data:
   prometheus_data:

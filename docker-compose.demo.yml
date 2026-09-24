@@ -1,0 +1,64 @@
+services:
+  nginx:
+    environment:
+      API_UPSTREAM: api:3000
+      API_RESOLVE: resolve
+    depends_on:
+      api:
+        condition: service_healthy
+
+  api:
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    build:
+      context: .
+      target: runtime
+    image: ${API_IMAGE:-shortlink-api:local}
+    env_file:
+      - ${APP_ENV_FILE:-.env.docker}
+    environment:
+      PORT: 3000
+      OTEL_SERVICE_NAME: shortlink-api
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      REDIS_CLUSTER_NODES: redis-cluster:7100,redis-cluster:7101,redis-cluster:7102
+      DB_POOL_MAX: 5
+    # No container_name or published port: replicas have independent addresses.
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      redis-cluster:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks: [shortlink]
+
+  redis-cluster:
+    environment:
+      REDIS_CLUSTER_HOSTNAME: redis-cluster
+
+  prometheus:
+    volumes:
+      - ./observability/prometheus/prometheus.docker.yml:/etc/prometheus/prometheus.yml:ro,z

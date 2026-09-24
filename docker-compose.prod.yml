@@ -1,0 +1,77 @@
+# Layer on top of base + demo. Requires Compose 2.24.4+ (!override / !reset).
+services:
+  nginx:
+    ports: !override ['${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80']
+    environment:
+      DEBUG_UPSTREAM: ''
+    mem_limit: 128m
+
+  api:
+    deploy:
+      replicas: 1
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=512
+      PERF_ENDPOINT_ENABLED: 'false'
+    mem_limit: 768m
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    ports: !reset []
+    mem_limit: 1g
+
+  redis:
+    ports: !reset []
+    mem_limit: 256m
+    command:
+      [
+        'redis-server',
+        '--maxmemory',
+        '128mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+
+  redis-cluster:
+    ports: !reset []
+    environment:
+      REDIS_NODE_MAXMEMORY: 64mb
+    mem_limit: 768m
+
+  rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env.production}
+    ports: !override ['127.0.0.1:15672:15672']
+    mem_limit: 768m
+
+  postgres-exporter:
+    environment:
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    mem_limit: 128m
+  redis-exporter:
+    mem_limit: 64m
+  prometheus:
+    mem_limit: 768m
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env.production}
+    mem_limit: 384m
+  alertmanager:
+    mem_limit: 128m
+  jaeger:
+    command:
+      - '--set=extensions.jaeger_storage.backends.some_storage.memory.max_traces=${JAEGER_MAX_TRACES:-5000}'
+    mem_limit: 384m
+  otel-collector:
+    mem_limit: 256m
+  analytics-worker:
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
+    mem_limit: 384m
+  outbox-worker:
+    environment:
+      NODE_OPTIONS: --max-old-space-size=256
+    mem_limit: 384m
+  migrate:
+    mem_limit: 768m

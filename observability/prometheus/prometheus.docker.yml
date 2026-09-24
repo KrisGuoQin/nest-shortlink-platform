@@ -19,8 +19,10 @@ scrape_configs:
 
   - job_name: shortlink-api
     metrics_path: /metrics
-    file_sd_configs:
-      - files: [/etc/prometheus/api-targets.yml]
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 3000
         refresh_interval: 5s
 
   - job_name: analytics-worker

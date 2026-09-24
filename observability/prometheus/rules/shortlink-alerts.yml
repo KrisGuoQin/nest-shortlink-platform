@@ -7,7 +7,7 @@ groups:
         expr: >
           up{
             job="shortlink-api"
-          } == 0
+          } == 0 or absent(up{job="shortlink-api"})
 
         for: 30s
 
